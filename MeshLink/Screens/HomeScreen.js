@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,7 +13,8 @@ import {
   StatusBar as RNStatusBar
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import {SafeAreaView}from 'react-native-safe-area-context';
+import { SafeAreaView as ContextSafeAreaView } from 'react-native-safe-area-context';
+
 // Component to render signal strength indicators matching the mockup
 const SignalIndicator = ({ level }) => {
   if (level === 'STRONG') {
@@ -52,10 +53,17 @@ const SignalIndicator = ({ level }) => {
 };
 
 export default function HomeScreen() {
-  // Animation value for rotating the radar sweep quadrant
+  // Navigation/emergency state toggle
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  // Animation values for the home screen radar sweep
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  // Animation value for pulsing search text
   const pulseAnim = useRef(new Animated.Value(0.5)).current;
+
+  // Animation values for the active SOS beacon pulse waves
+  const pulseRing1 = useRef(new Animated.Value(0)).current;
+  const pulseRing2 = useRef(new Animated.Value(0)).current;
+  const pulseRing3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Continuous 360 degree rotation loop for radar sweep
@@ -87,14 +95,108 @@ export default function HomeScreen() {
     ).start();
   }, [rotateAnim, pulseAnim]);
 
+  // Handle active SOS broadcasting waves propagation
+  useEffect(() => {
+    if (isBroadcasting) {
+      pulseRing1.setValue(0);
+      pulseRing2.setValue(0);
+      pulseRing3.setValue(0);
+
+      const createRingAnimation = (animValue, delayTime) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.delay(delayTime),
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 2400,
+              easing: Easing.out(Easing.ease),
+              useNativeDriver: true,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            })
+          ])
+        );
+      };
+
+      const anim1 = createRingAnimation(pulseRing1, 0);
+      const anim2 = createRingAnimation(pulseRing2, 800);
+      const anim3 = createRingAnimation(pulseRing3, 1600);
+
+      Animated.parallel([anim1, anim2, anim3]).start();
+      
+      return () => {
+        anim1.stop();
+        anim2.stop();
+        anim3.stop();
+      };
+    }
+  }, [isBroadcasting, pulseRing1, pulseRing2, pulseRing3]);
+
   // Interpolation for 360 degree rotation
   const rotateSpin = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
+  // Interpolations for propagating emergency signal waves
+  const scale1 = pulseRing1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] });
+  const opacity1 = pulseRing1.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.9, 0.4, 0] });
+
+  const scale2 = pulseRing2.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] });
+  const opacity2 = pulseRing2.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.9, 0.4, 0] });
+
+  const scale3 = pulseRing3.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] });
+  const opacity3 = pulseRing3.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.9, 0.4, 0] });
+
+  // Render SOS broadcast screen if active
+  if (isBroadcasting) {
+    return (
+      <ContextSafeAreaView style={[styles.container, styles.sosContainer]}>
+        <StatusBar barStyle="light-content" backgroundColor="#080d19" />
+        
+        <View style={styles.sosContent}>
+          {/* Beacon Waves Section */}
+          <View style={styles.sosBeaconWrapper}>
+            {/* Concentric Static Rings */}
+            <View style={styles.sosRingOuter}>
+              <View style={styles.sosRingMiddle}>
+                {/* Central checkmark container */}
+                <View style={styles.sosCheckmarkOutline}>
+                  <Feather name="check" size={32} color="#fca5a5" />
+                </View>
+              </View>
+            </View>
+
+            {/* Dynamic expanding wave pulses */}
+            <Animated.View style={[styles.sosPulseWave, { transform: [{ scale: scale1 }], opacity: opacity1 }]} />
+            <Animated.View style={[styles.sosPulseWave, { transform: [{ scale: scale2 }], opacity: opacity2 }]} />
+            <Animated.View style={[styles.sosPulseWave, { transform: [{ scale: scale3 }], opacity: opacity3 }]} />
+          </View>
+
+          {/* SOS Labels */}
+          <Text style={styles.sosHeadline}>SOS BROADCAST ACTIVE</Text>
+          <Text style={styles.sosSubheadline}>Sent to everyone nearby</Text>
+          <Text style={styles.sosDescription}>Mesh network acknowledges receipt by 8 peers</Text>
+
+          {/* Stop Button */}
+          <TouchableOpacity 
+            style={styles.stopButton} 
+            activeOpacity={0.8}
+            onPress={() => setIsBroadcasting(false)}
+          >
+            <Text style={styles.stopButtonText}>Stop Broadcasting</Text>
+          </TouchableOpacity>
+        </View>
+      </ContextSafeAreaView>
+    );
+  }
+
+  // Otherwise, render normal peer discovery list
   return (
-    <SafeAreaView style={styles.container}>
+    <ContextSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#080e1b" />
       
       {/* Wrapper to handle ScrollView and absolute Floating Button relative to active space */}
@@ -180,7 +282,12 @@ export default function HomeScreen() {
 
           {/* Device Finding Radar Container */}
           <View style={styles.radarContainer}>
-            <View style={styles.radarBackgroundCircle}>
+            {/* Wrap the background circle in a TouchableOpacity to route/toggle active SOS state */}
+            <TouchableOpacity 
+              style={styles.radarBackgroundCircle} 
+              activeOpacity={0.85}
+              onPress={() => setIsBroadcasting(true)}
+            >
               {/* Concentric Circles */}
               <View style={styles.radarRingOuter}>
                 <View style={styles.radarRingMiddle}>
@@ -195,7 +302,7 @@ export default function HomeScreen() {
               <Animated.View style={[styles.radarSweepWrapper, { transform: [{ rotate: rotateSpin }] }]}>
                 <View style={styles.radarSweepQuadrant} />
               </Animated.View>
-            </View>
+            </TouchableOpacity>
 
             <Animated.Text style={[styles.scanningText, { opacity: pulseAnim }]}>
               Looking for nearby devices...
@@ -205,7 +312,7 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/* Floating Alert Beacon Button (positioned relative to container, above bottom tab bar) */}
-        <TouchableOpacity style={styles.floatingBeaconButton} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.floatingBeaconButton} activeOpacity={0.8} onPress={() => setIsBroadcasting(true)}>
           <MaterialCommunityIcons name="map-marker-radius" size={28} color="#ffffff" />
         </TouchableOpacity>
       </View>
@@ -227,7 +334,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         {/* SOS Tab */}
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setIsBroadcasting(true)}>
           <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
           <Text style={styles.tabLabel}>SOS</Text>
         </TouchableOpacity>
@@ -238,7 +345,7 @@ export default function HomeScreen() {
           <Text style={styles.tabLabel}>Network</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ContextSafeAreaView>
   );
 }
 
@@ -520,5 +627,112 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
   },
+  
+  // SOS BROADCAST ACTIVE STYLES
+  sosContainer: {
+    backgroundColor: '#050a12',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sosContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 24,
+  },
+  sosBeaconWrapper: {
+    width: 340,
+    height: 340,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 36,
+  },
+  sosRingOuter: {
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    borderWidth: 1,
+    borderColor: 'rgba(248, 113, 113, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sosRingMiddle: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 1.5,
+    borderColor: 'rgba(248, 113, 113, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sosCheckmarkOutline: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3.5,
+    borderColor: '#fca5a5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#050a12',
+    shadowColor: '#fca5a5',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 5,
+  },
+  sosPulseWave: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 1.5,
+    borderColor: 'rgba(248, 113, 113, 0.45)',
+  },
+  sosHeadline: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 12,
+    letterSpacing: 0.6,
+  },
+  sosSubheadline: {
+    fontSize: 16,
+    color: '#fca5a5',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  sosDescription: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 36,
+    lineHeight: 20,
+    paddingHorizontal: 20,
+  },
+  stopButton: {
+    height: 48,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    backgroundColor: '#1b2333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2d3748',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  stopButtonText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
 });
-
