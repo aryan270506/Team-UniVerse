@@ -11,11 +11,13 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen({
   peerName,
@@ -25,9 +27,25 @@ export default function ChatScreen({
   onTabChange,
   triggerSOS
 }) {
+  const insets = useSafeAreaInsets();
   const [chatMessage, setChatMessage] = React.useState('');
-  const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
-  const chatScrollRef = useRef();
+  const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);  const [isKeyboardVisible, setKeyboardVisible] = React.useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);  const chatScrollRef = useRef();
 
  
   useEffect(() => {
@@ -133,7 +151,17 @@ export default function ChatScreen({
   };
 
   return (
-    <View style={styles.chatContainer}>
+    <KeyboardAvoidingView 
+      style={[
+        styles.chatContainer, 
+        { 
+          paddingTop: insets.top,
+          paddingBottom: isKeyboardVisible ? 0 : insets.bottom 
+        }
+      ]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+    >
       {/* Chat Header */}
       <View style={styles.chatHeader}>
         <TouchableOpacity 
@@ -172,9 +200,10 @@ export default function ChatScreen({
         </View>
       </View>
 
-      {/* Messages Stream */}
-      <ScrollView 
-        ref={chatScrollRef}
+
+        {/* Messages Stream */}
+        <ScrollView 
+          ref={chatScrollRef}
         style={styles.messageStream} 
         contentContainerStyle={styles.messageStreamContent}
         onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
@@ -263,91 +292,80 @@ export default function ChatScreen({
                         <Text style={styles.attachmentName}>{msg.fileName}</Text>
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
-                          <Text style={styles.imagePlaceholderText}>Image Attachment</Text>
-                        </View>
-                      )}
-                      <Text style={styles.attachmentMetaText}>{msg.attachment.fileName} ({msg.attachment.fileSize})</Text>
+                      <Feather name="download" size={14} color="#a5b4fc" style={styles.attachmentDownloadIcon} />
                     </View>
+                  ) : (
+                    <Text style={styles.msgText}>{msg.text}</Text>
                   )}
-
-                  {/* Handle Document Attachments */}
-                  {msg.attachment?.isDocument && (
-                    <View style={styles.docAttachmentContainer}>
-                      <View style={styles.docIconWrapper}>
-                        <Feather name="file-text" size={20} color="#1d4ed8" />
-                      </View>
-                      <View style={styles.docMeta}>
-                        <Text style={styles.docNameText} numberOfLines={1}>{msg.attachment.fileName}</Text>
-                        <Text style={styles.docSizeText}>{msg.attachment.fileSize}</Text>
-                      </View>
-                    </View>
-                  )}
-                  <View style={styles.msgStatusRow}>
-                    <Text style={styles.msgTimeText}>{msg.time}</Text>
-                    {msg.status && (
-                      <>
-                        <MaterialCommunityIcons name="check-all" size={14} color="#818cf8" style={styles.deliveredIcon} />
-                        <Text style={styles.deliveredText}>{msg.status}</Text>
-                      </>
-                    )}
-                  </View>
                 </View>
-              );
-            }
-          })}
-        </ScrollView>
+                <View style={styles.msgStatusRow}>
+                  <Text style={styles.msgTimeText}>{msg.time}</Text>
+                  {msg.status && (
+                    <>
+                      <MaterialCommunityIcons name="check-all" size={14} color="#818cf8" style={styles.deliveredIcon} />
+                      <Text style={styles.deliveredText}>{msg.status}</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          }
+        })}
+      </ScrollView>
 
-        <View style={styles.chatInputWrapper}>
-          <TouchableOpacity 
-            style={styles.chatAttachButton} 
-            activeOpacity={0.7}
-            onPress={() => setShowAttachmentMenu(true)}
-          >
-            <Feather name="plus" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-          <View style={styles.chatTextInputContainer}>
-            <TextInput
-              placeholder="Type a secure message..."
-              placeholderTextColor="#4b5563"
-              style={styles.chatTextInput}
-              value={chatMessage}
-              onChangeText={setChatMessage}
-              onSubmitEditing={handleSend}
-            />
-          </View>
-          <TouchableOpacity 
-            style={[styles.chatSendButton, !chatMessage.trim() && { opacity: 0.6 }]} 
-            activeOpacity={0.8}
-            onPress={handleSend}
-            disabled={!chatMessage.trim()}
-          >
-            <Feather name="send" size={18} color="#080e1b" />
-          </TouchableOpacity>
+      <View style={styles.chatInputWrapper}>
+        <TouchableOpacity 
+          style={styles.chatAttachButton} 
+          activeOpacity={0.7}
+          onPress={() => setShowAttachmentMenu(true)}
+        >
+          <Feather name="plus" size={22} color="#94a3b8" />
+        </TouchableOpacity>
+        <View style={styles.chatTextInputContainer}>
+          <TextInput
+            placeholder="Type a secure message..."
+            placeholderTextColor="#4b5563"
+            style={styles.chatTextInput}
+            value={chatMessage}
+            onChangeText={setChatMessage}
+            onSubmitEditing={handleSend}
+          />
         </View>
-      </KeyboardAvoidingView>
-
-      {/* Bottom Tab */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={onBack}>
-          <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Peers</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Profile')}>
-          <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={triggerSOS}>
-          <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>SOS</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Network')}>
-          <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Network</Text>
+        <TouchableOpacity 
+          style={[styles.chatSendButton, !chatMessage.trim() && { opacity: 0.6 }]} 
+          activeOpacity={0.8}
+          onPress={handleSend}
+          disabled={!chatMessage.trim()}
+        >
+          <Feather name="send" size={18} color="#080e1b" />
         </TouchableOpacity>
       </View>
+
+
+      {/* Bottom Tab */}
+      {!isKeyboardVisible && (
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={onBack}>
+            <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Peers</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Profile')}>
+            <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={triggerSOS}>
+            <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>SOS</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Network')}>
+            <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Network</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Attachment Options Modal */}
       <Modal
@@ -390,7 +408,7 @@ export default function ChatScreen({
           </BlurView>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
