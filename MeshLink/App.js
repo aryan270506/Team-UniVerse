@@ -12,18 +12,129 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import HomeScreen from './Screens/HomeScreen';
-import ChatScreen from './Screens/ChatScreen';
-import NetworkScreen from './Screens/NetworkScreen';
-import ProfileScreen from './Screens/ProfileScreen';
-import SOSScreen from './Screens/SOSScreen';
+const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
+
+// Dynamic wrappers to resolve screen components on demand without static top-level imports
+const HomeScreen = (props) => {
+  const Screen = require('./Screens/HomeScreen').default;
+  return <Screen {...props} />;
+};
+const ChatScreen = (props) => {
+  const Screen = require('./Screens/ChatScreen').default;
+  return <Screen {...props} />;
+};
+const NetworkScreen = (props) => {
+  const Screen = require('./Screens/NetworkScreen').default;
+  return <Screen {...props} />;
+};
+const ProfileScreen = (props) => {
+  const Screen = require('./Screens/ProfileScreen').default;
+  return <Screen {...props} />;
+};
+const SOSScreen = (props) => {
+  const Screen = require('./Screens/SOSScreen').default;
+  return <Screen {...props} />;
+};
+
+function MainTabsScreen({
+  navigation,
+  peers,
+  activeTab,
+  setActiveTab,
+  handleAddPeer,
+  handleToggleContactStatus,
+  handleDeleteChat,
+  setShowConfirmModal
+}) {
+  return (
+    <View style={styles.contentWrapper}>
+      {/* Active Tab Screen */}
+      {activeTab === 'Peers' && (
+        <HomeScreen
+          peers={peers}
+          onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
+          onTriggerSOS={() => setShowConfirmModal(true)}
+          onAddPeer={handleAddPeer}
+          onToggleContactStatus={handleToggleContactStatus}
+          onDeleteChat={handleDeleteChat}
+        />
+      )}
+      
+      {activeTab === 'Network' && (
+        <NetworkScreen
+          onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
+        />
+      )}
+      
+      {activeTab === 'Profile' && (
+        <ProfileScreen
+          peers={peers}
+        />
+      )}
+
+      {/* Bottom Tab Bar */}
+      <View style={styles.bottomTabBar}>
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          activeOpacity={0.7}
+          onPress={() => setActiveTab('Peers')}
+        >
+          {activeTab === 'Peers' ? (
+            <View style={styles.activeTabHighlight}>
+              <MaterialCommunityIcons name="account-group" size={22} color="#ffffff" />
+            </View>
+          ) : (
+            <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+          )}
+          <Text style={[styles.tabLabel, activeTab === 'Peers' && styles.activeTabLabel]}>Peers</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          activeOpacity={0.7}
+          onPress={() => setActiveTab('Profile')}
+        >
+          {activeTab === 'Profile' ? (
+            <View style={styles.activeTabHighlight}>
+              <MaterialCommunityIcons name="account" size={22} color="#ffffff" />
+            </View>
+          ) : (
+            <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+          )}
+          <Text style={[styles.tabLabel, activeTab === 'Profile' && styles.activeTabLabel]}>Profile</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setShowConfirmModal(true)}>
+          <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+          <Text style={styles.tabLabel}>SOS</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.tabItem} 
+          activeOpacity={0.7}
+          onPress={() => setActiveTab('Network')}
+        >
+          {activeTab === 'Network' ? (
+            <View style={styles.activeTabHighlight}>
+              <MaterialCommunityIcons name="earth" size={22} color="#ffffff" />
+            </View>
+          ) : (
+            <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+          )}
+          <Text style={[styles.tabLabel, activeTab === 'Network' && styles.activeTabLabel]}>Network</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
 
 export default function App() {
 
   const [activeTab, setActiveTab] = useState('Peers');
-  const [activeChatPeer, setActiveChatPeer] = useState(null);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
   
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
@@ -102,112 +213,58 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        
-        {isBroadcasting ? (
-          <SOSScreen
-            peers={peers}
-            onStopBroadcasting={() => setIsBroadcasting(false)}
-            onSelectPeerOptions={(peer) => {
-              setSelectedPeerOptions(peer);
-              setShowSOSOptionsModal(true);
-            }}
-          />
-        ) : activeChatPeer ? (
-          <ChatScreen
-            peerName={activeChatPeer}
-            messages={chatSessions[activeChatPeer] || []}
-            onSendMessage={(text, attachment) => handleSendChatMessage(activeChatPeer, text, attachment)}
-            onBack={() => setActiveChatPeer(null)}
-            onTabChange={(tab) => {
-              setActiveChatPeer(null);
-              setActiveTab(tab);
-            }}
-            triggerSOS={() => {
-              setActiveChatPeer(null);
-              setShowConfirmModal(true);
-            }}
-          />
-        ) : (
-          <View style={styles.contentWrapper}>
-            {/* Active Tab Screen */}
-            {activeTab === 'Peers' && (
-              <HomeScreen
-                peers={peers}
-                onStartChat={(peerName) => setActiveChatPeer(peerName)}
-                onTriggerSOS={() => setShowConfirmModal(true)}
-                onAddPeer={handleAddPeer}
-                onToggleContactStatus={handleToggleContactStatus}
-                onDeleteChat={handleDeleteChat}
-              />
-            )}
-            
-            {activeTab === 'Network' && (
-              <NetworkScreen
-                onStartChat={(peerName) => setActiveChatPeer(peerName)}
-              />
-            )}
-            
-            {activeTab === 'Profile' && (
-              <ProfileScreen
-                peers={peers}
-              />
-            )}
-
-            {/* Bottom Tab Bar */}
-            <View style={styles.bottomTabBar}>
-              <TouchableOpacity 
-                style={styles.tabItem} 
-                activeOpacity={0.7}
-                onPress={() => setActiveTab('Peers')}
-              >
-                {activeTab === 'Peers' ? (
-                  <View style={styles.activeTabHighlight}>
-                    <MaterialCommunityIcons name="account-group" size={22} color="#ffffff" />
-                  </View>
-                ) : (
-                  <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-                )}
-                <Text style={[styles.tabLabel, activeTab === 'Peers' && styles.activeTabLabel]}>Peers</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.tabItem} 
-                activeOpacity={0.7}
-                onPress={() => setActiveTab('Profile')}
-              >
-                {activeTab === 'Profile' ? (
-                  <View style={styles.activeTabHighlight}>
-                    <MaterialCommunityIcons name="account" size={22} color="#ffffff" />
-                  </View>
-                ) : (
-                  <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-                )}
-                <Text style={[styles.tabLabel, activeTab === 'Profile' && styles.activeTabLabel]}>Profile</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setShowConfirmModal(true)}>
-                <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-                <Text style={styles.tabLabel}>SOS</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.tabItem} 
-                activeOpacity={0.7}
-                onPress={() => setActiveTab('Network')}
-              >
-                {activeTab === 'Network' ? (
-                  <View style={styles.activeTabHighlight}>
-                    <MaterialCommunityIcons name="earth" size={22} color="#ffffff" />
-                  </View>
-                ) : (
-                  <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-                )}
-                <Text style={[styles.tabLabel, activeTab === 'Network' && styles.activeTabLabel]}>Network</Text>
-              </TouchableOpacity>
-            </View>
-
-          </View>
-        )}
+        <NavigationContainer ref={navigationRef}>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main">
+              {(props) => (
+                <MainTabsScreen
+                  {...props}
+                  peers={peers}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  handleAddPeer={handleAddPeer}
+                  handleToggleContactStatus={handleToggleContactStatus}
+                  handleDeleteChat={handleDeleteChat}
+                  setShowConfirmModal={setShowConfirmModal}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Chat">
+              {(props) => {
+                const peerName = props.route.params?.peerName;
+                return (
+                  <ChatScreen
+                    {...props}
+                    peerName={peerName}
+                    messages={chatSessions[peerName] || []}
+                    onSendMessage={(text, attachment) => handleSendChatMessage(peerName, text, attachment)}
+                    onBack={() => props.navigation.goBack()}
+                    onTabChange={(tab) => {
+                      setActiveTab(tab);
+                      props.navigation.goBack();
+                    }}
+                    triggerSOS={() => {
+                      setShowConfirmModal(true);
+                    }}
+                  />
+                );
+              }}
+            </Stack.Screen>
+            <Stack.Screen name="SOS">
+              {(props) => (
+                <SOSScreen
+                  {...props}
+                  peers={peers}
+                  onStopBroadcasting={() => props.navigation.goBack()}
+                  onSelectPeerOptions={(peer) => {
+                    setSelectedPeerOptions(peer);
+                    setShowSOSOptionsModal(true);
+                  }}
+                />
+              )}
+            </Stack.Screen>
+          </Stack.Navigator>
+        </NavigationContainer>
 
         {/* SOS Confirmation  */}
         <Modal
@@ -240,7 +297,9 @@ export default function App() {
                   activeOpacity={0.8}
                   onPress={() => {
                     setShowConfirmModal(false);
-                    setIsBroadcasting(true);
+                    if (navigationRef.isReady()) {
+                      navigationRef.navigate('SOS');
+                    }
                   }}
                 >
                   <Text style={styles.modalConfirmText}>Broadcast</Text>
@@ -286,8 +345,10 @@ export default function App() {
                   activeOpacity={0.7}
                   onPress={() => {
                     setShowSOSOptionsModal(false);
-                    setIsBroadcasting(false);
-                    setActiveChatPeer(selectedPeerOptions.name);
+                    if (navigationRef.isReady()) {
+                      navigationRef.navigate('Main');
+                      navigationRef.navigate('Chat', { peerName: selectedPeerOptions.name });
+                    }
                   }}
                 >
                   <Feather name="message-square" size={20} color="#a5b4fc" style={styles.optionIcon} />
