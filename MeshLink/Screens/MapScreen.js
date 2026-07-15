@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Line, Path, G, Text as SvgText } from 'react-native-svg';
-
+import React, { useState, useEffect } from 'react';
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function MapScreen({

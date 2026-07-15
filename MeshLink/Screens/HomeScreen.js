@@ -63,7 +63,8 @@ export default function HomeScreen({
   onAddPeer,
   onToggleContactStatus,
   onDeleteChat,
-  onPressRadar
+  onPressRadar,
+  onPressConnect
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
@@ -183,7 +184,7 @@ export default function HomeScreen({
             >
               <Feather name="user-plus" size={18} color="#a5b4fc" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7} onPress={onPressConnect}>
               <MaterialCommunityIcons name="connection" size={24} color="#a5b4fc" />
             </TouchableOpacity>
           </View>
