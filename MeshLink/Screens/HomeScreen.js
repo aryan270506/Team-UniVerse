@@ -15,7 +15,10 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedSvgText = Animated.createAnimatedComponent(SvgText);
 
 const SignalIndicator = ({ level }) => {
   if (level === 'STRONG') {
@@ -59,7 +62,8 @@ export default function HomeScreen({
   onTriggerSOS,
   onAddPeer,
   onToggleContactStatus,
-  onDeleteChat
+  onDeleteChat,
+  onPressRadar
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
@@ -104,6 +108,26 @@ export default function HomeScreen({
   const rotateSpin = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
+  });
+
+  const pingOpacitySarah = rotateAnim.interpolate({
+    inputRange: [0, 0.11, 0.12, 0.62, 1],
+    outputRange: [0.15, 0.15, 1.0, 0.15, 0.15],
+  });
+  
+  const pingOpacityElena = rotateAnim.interpolate({
+    inputRange: [0, 0.44, 0.45, 0.95, 1],
+    outputRange: [0.15, 0.15, 1.0, 0.15, 0.15],
+  });
+
+  const pingOpacityExtra = rotateAnim.interpolate({
+    inputRange: [0, 0.14, 0.63, 0.64, 1],
+    outputRange: [0.38, 0.15, 0.15, 1.0, 0.38],
+  });
+
+  const pingOpacityMarcus = rotateAnim.interpolate({
+    inputRange: [0, 0.32, 0.81, 0.82, 1],
+    outputRange: [0.45, 0.15, 0.15, 1.0, 0.45],
   });
 
   const handleLongPress = (peer) => {
@@ -212,7 +236,7 @@ export default function HomeScreen({
           <TouchableOpacity 
             style={styles.radarBackgroundCircle} 
             activeOpacity={0.85}
-            onPress={onTriggerSOS}
+            onPress={onPressRadar}
           >
             {/* SVG High-Fidelity Tactical Radar */}
             <Svg width="220" height="220" viewBox="0 0 220 220" style={StyleSheet.absoluteFill}>
@@ -249,20 +273,32 @@ export default function HomeScreen({
               <Circle cx="110" cy="110" r="110" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
 
               {/* Sarah Chen (Strong) - Signal Blue/Green */}
-              <Circle cx="154" cy="65" r="8" fill="rgba(16, 185, 129, 0.2)" />
-              <Circle cx="154" cy="65" r="4" fill="#10b981" />
+              <AnimatedCircle cx="154" cy="65" r="8" fill="rgba(16, 185, 129, 0.25)" opacity={pingOpacitySarah} />
+              <AnimatedCircle cx="154" cy="65" r="4" fill="#10b981" opacity={pingOpacitySarah} />
+              <AnimatedSvgText x="164" y="68" fill="#10b981" fontSize="8" fontWeight="600" opacity={pingOpacitySarah} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
+                Sarah Chen
+              </AnimatedSvgText>
 
               {/* Marcus Thorne (Fair) - Amber */}
-              <Circle cx="66" cy="88" r="8" fill="rgba(251, 191, 36, 0.2)" />
-              <Circle cx="66" cy="88" r="4" fill="#fbbf24" />
+              <AnimatedCircle cx="66" cy="88" r="8" fill="rgba(251, 191, 36, 0.25)" opacity={pingOpacityMarcus} />
+              <AnimatedCircle cx="66" cy="88" r="4" fill="#fbbf24" opacity={pingOpacityMarcus} />
+              <AnimatedSvgText x="56" y="91" fill="#fbbf24" fontSize="8" fontWeight="600" textAnchor="end" opacity={pingOpacityMarcus} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
+                Marcus Thorne
+              </AnimatedSvgText>
 
               {/* Elena Rodriguez (Offline/Poor) - Gray/Offline */}
-              <Circle cx="132" cy="176" r="8" fill="rgba(107, 114, 128, 0.2)" />
-              <Circle cx="132" cy="176" r="4" fill="#6b7280" />
+              <AnimatedCircle cx="132" cy="176" r="8" fill="rgba(107, 114, 128, 0.25)" opacity={pingOpacityElena} />
+              <AnimatedCircle cx="132" cy="176" r="4" fill="#6b7280" opacity={pingOpacityElena} />
+              <AnimatedSvgText x="142" y="179" fill="#94a3b8" fontSize="8" fontWeight="600" opacity={pingOpacityElena} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
+                Elena Rodriguez
+              </AnimatedSvgText>
 
               {/* Extra Unidentified Node (Amber) */}
-              <Circle cx="60" cy="150" r="6" fill="rgba(29, 78, 216, 0.15)" />
-              <Circle cx="60" cy="150" r="3" fill="#3b82f6" />
+              <AnimatedCircle cx="60" cy="150" r="6" fill="rgba(59, 130, 246, 0.2)" opacity={pingOpacityExtra} />
+              <AnimatedCircle cx="60" cy="150" r="3" fill="#3b82f6" opacity={pingOpacityExtra} />
+              <AnimatedSvgText x="70" y="153" fill="#3b82f6" fontSize="7" fontWeight="600" opacity={pingOpacityExtra} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
+                NODE 04
+              </AnimatedSvgText>
             </Svg>
 
             {/* Sweep overlay (Rotated via Animated.View) */}

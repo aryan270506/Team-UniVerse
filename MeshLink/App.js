@@ -39,6 +39,10 @@ const SOSScreen = (props) => {
   const Screen = require('./Screens/SOSScreen').default;
   return <Screen {...props} />;
 };
+const MapScreen = (props) => {
+  const Screen = require('./Screens/MapScreen').default;
+  return <Screen {...props} />;
+};
 
 function MainTabsScreen({
   navigation,
@@ -61,6 +65,7 @@ function MainTabsScreen({
           onAddPeer={handleAddPeer}
           onToggleContactStatus={handleToggleContactStatus}
           onDeleteChat={handleDeleteChat}
+          onPressRadar={() => navigation.navigate('Map')}
         />
       )}
       
@@ -273,6 +278,15 @@ export default function App() {
                     setSelectedPeerOptions(peer);
                     setShowSOSOptionsModal(true);
                   }}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Map">
+              {(props) => (
+                <MapScreen
+                  {...props}
+                  peers={peers}
+                  onBack={() => props.navigation.goBack()}
                 />
               )}
             </Stack.Screen>
