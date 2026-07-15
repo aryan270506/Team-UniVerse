@@ -59,6 +59,10 @@ const MapScreen = (props) => {
   const Screen = require('./Screens/MapScreen').default;
   return <Screen {...props} />;
 };
+const ScannerScreen = (props) => {
+  const Screen = require('./Screens/ScannerScreen').default;
+  return <Screen {...props} />;
+};
 
 function MainTabsScreen({
   navigation,
@@ -81,6 +85,7 @@ function MainTabsScreen({
           onToggleContactStatus={handleToggleContactStatus}
           onDeleteChat={handleDeleteChat}
           onPressRadar={() => navigation.navigate('Map')}
+          onPressConnect={() => navigation.navigate('Scanner')}
         />
       )}
 
@@ -91,7 +96,11 @@ function MainTabsScreen({
       )}
 
       {activeTab === 'Profile' && (
-        <ProfileScreen peers={peers} />
+        <ProfileScreen
+          peers={peers}
+          onNavigateToNetwork={() => setActiveTab('Network')}
+          onNavigateToProfile={() => setActiveTab('Profile')}
+        />
       )}
 
       <View style={styles.bottomTabBar}>
@@ -334,6 +343,15 @@ export default function App() {
                 <MapScreen
                   {...props}
                   peers={peers}
+                  onBack={() => props.navigation.goBack()}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Scanner">
+              {(props) => (
+                <ScannerScreen
+                  {...props}
+                  onAddPeer={handleAddPeer}
                   onBack={() => props.navigation.goBack()}
                 />
               )}

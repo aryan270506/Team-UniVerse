@@ -10,11 +10,14 @@ import {
   Modal,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen({
   peerName,
@@ -24,9 +27,25 @@ export default function ChatScreen({
   onTabChange,
   triggerSOS
 }) {
+  const insets = useSafeAreaInsets();
   const [chatMessage, setChatMessage] = React.useState('');
-  const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
-  const chatScrollRef = useRef();
+  const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);  const [isKeyboardVisible, setKeyboardVisible] = React.useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);  const chatScrollRef = useRef();
 
  
   useEffect(() => {
@@ -132,7 +151,17 @@ export default function ChatScreen({
   };
 
   return (
-    <View style={styles.chatContainer}>
+    <KeyboardAvoidingView 
+      style={[
+        styles.chatContainer, 
+        { 
+          paddingTop: insets.top,
+          paddingBottom: isKeyboardVisible ? 0 : insets.bottom 
+        }
+      ]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+    >
       {/* Chat Header */}
       <View style={styles.chatHeader}>
         <TouchableOpacity 
@@ -171,9 +200,10 @@ export default function ChatScreen({
         </View>
       </View>
 
-      {/* Messages Stream */}
-      <ScrollView 
-        ref={chatScrollRef}
+
+        {/* Messages Stream */}
+        <ScrollView 
+          ref={chatScrollRef}
         style={styles.messageStream} 
         contentContainerStyle={styles.messageStreamContent}
         onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
@@ -311,28 +341,31 @@ export default function ChatScreen({
         </TouchableOpacity>
       </View>
 
+
       {/* Bottom Tab */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={onBack}>
-          <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Peers</Text>
-        </TouchableOpacity>
+      {!isKeyboardVisible && (
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={onBack}>
+            <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Peers</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Profile')}>
-          <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Profile')}>
+            <MaterialCommunityIcons name="account-outline" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Profile</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={triggerSOS}>
-          <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>SOS</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={triggerSOS}>
+            <MaterialCommunityIcons name="signal-variant" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>SOS</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Network')}>
-          <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
-          <Text style={styles.tabLabel}>Network</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => onTabChange('Network')}>
+            <MaterialCommunityIcons name="earth" size={24} color="#94a3b8" style={styles.inactiveIcon} />
+            <Text style={styles.tabLabel}>Network</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Attachment Options Modal */}
       <Modal
@@ -375,7 +408,7 @@ export default function ChatScreen({
           </BlurView>
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -384,6 +417,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#060a13',
     width: '100%',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   chatHeader: {
     flexDirection: 'row',

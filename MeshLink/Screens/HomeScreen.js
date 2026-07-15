@@ -63,7 +63,8 @@ export default function HomeScreen({
   onAddPeer,
   onToggleContactStatus,
   onDeleteChat,
-  onPressRadar
+  onPressRadar,
+  onPressConnect
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
@@ -183,7 +184,7 @@ export default function HomeScreen({
             >
               <Feather name="user-plus" size={18} color="#a5b4fc" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7} onPress={onPressConnect}>
               <MaterialCommunityIcons name="connection" size={24} color="#a5b4fc" />
             </TouchableOpacity>
           </View>
@@ -415,6 +416,24 @@ export default function HomeScreen({
         <View style={styles.newNodeModalOverlay}>
           <BlurView intensity={30} tint="dark" style={styles.glassAddNodeCard}>
             <Text style={styles.addNodeTitle}>Add Mesh Node</Text>
+            
+            <TouchableOpacity 
+              style={styles.scanCodeModalButton} 
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowAddNodeModal(false);
+                onPressConnect();
+              }}
+            >
+              <Feather name="qr-code" size={16} color="#ffffff" style={{ marginRight: 8 }} />
+              <Text style={styles.scanCodeModalButtonText}>Scan QR Code to Add Node</Text>
+            </TouchableOpacity>
+
+            <View style={styles.orSeparatorContainer}>
+              <View style={styles.separatorLine} />
+              <Text style={styles.orText}>OR ENTER MANUALLY</Text>
+              <View style={styles.separatorLine} />
+            </View>
             
             <Text style={styles.inputLabel}>NODE NAME</Text>
             <View style={styles.modalInputContainer}>
@@ -821,6 +840,44 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 20,
     textAlign: 'center',
+  },
+  scanCodeModalButton: {
+    width: '100%',
+    height: 40,
+    backgroundColor: '#1d4ed8',
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  scanCodeModalButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  orSeparatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  orText: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: 'bold',
+    marginHorizontal: 8,
+    letterSpacing: 0.5,
   },
   inputLabel: {
     fontSize: 11,
