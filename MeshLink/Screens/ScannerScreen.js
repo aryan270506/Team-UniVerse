@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Rect, Path, Circle } from 'react-native-svg';
+import QRCode from 'react-native-qrcode-svg';
 
 const { width } = Dimensions.get('window');
 const SCAN_SIZE = width * 0.65;
@@ -181,11 +182,25 @@ export default function ScannerScreen({ navigation, onAddPeer, onBack }) {
         </View>
       ) : (
         <View style={styles.codeContainer}>
-          <Text style={styles.instructions}>Share your Mesh credentials to connect with other users</Text>
+          <Text style={styles.instructions}>Show this code to another user to share your Mesh credentials</Text>
 
           {/* QR Code Card */}
           <View style={styles.qrCard}>
             <Text style={styles.qrHeader}>MESH NETWORK ID</Text>
+
+            {/* Real QR Code Generator */}
+            <View style={styles.qrWrapper}>
+              <QRCode
+                value={JSON.stringify({
+                  name: 'My Device',
+                  id: 'NODE_MESH_V4.2',
+                  ip: '192.168.4.1'
+                })}
+                size={180}
+                color="#080d19"
+                backgroundColor="#ffffff"
+              />
+            </View>
 
             <Text style={styles.qrUser}>My Device (You)</Text>
             <Text style={styles.qrId}>NODE_MESH_V4.2</Text>
