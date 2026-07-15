@@ -181,53 +181,11 @@ export default function ScannerScreen({ navigation, onAddPeer, onBack }) {
         </View>
       ) : (
         <View style={styles.codeContainer}>
-          <Text style={styles.instructions}>Show this code to another user to share your Mesh credentials</Text>
+          <Text style={styles.instructions}>Share your Mesh credentials to connect with other users</Text>
 
           {/* QR Code Card */}
           <View style={styles.qrCard}>
             <Text style={styles.qrHeader}>MESH NETWORK ID</Text>
-            
-            {/* Mock Vector QR Code */}
-            <View style={styles.qrWrapper}>
-              <Svg width="180" height="180" viewBox="0 0 100 100">
-                {/* Outer corners */}
-                <Rect x="0" y="0" width="25" height="25" fill="#1d4ed8" rx="2" />
-                <Rect x="3" y="3" width="19" height="19" fill="#080d19" rx="1" />
-                <Rect x="7" y="7" width="11" height="11" fill="#1d4ed8" rx="0.5" />
-
-                <Rect x="75" y="0" width="25" height="25" fill="#1d4ed8" rx="2" />
-                <Rect x="78" y="3" width="19" height="19" fill="#080d19" rx="1" />
-                <Rect x="82" y="7" width="11" height="11" fill="#1d4ed8" rx="0.5" />
-
-                <Rect x="0" y="75" width="25" height="25" fill="#1d4ed8" rx="2" />
-                <Rect x="3" y="78" width="19" height="19" fill="#080d19" rx="1" />
-                <Rect x="7" y="82" width="11" height="11" fill="#1d4ed8" rx="0.5" />
-
-                {/* QR details & bit grid pattern */}
-                <Rect x="35" y="5" width="8" height="8" fill="#1d4ed8" />
-                <Rect x="48" y="10" width="12" height="6" fill="#1d4ed8" />
-                <Rect x="65" y="15" width="6" height="12" fill="#10b981" />
-                
-                <Rect x="5" y="35" width="14" height="6" fill="#1d4ed8" />
-                <Rect x="15" y="45" width="8" height="14" fill="#1d4ed8" />
-                <Rect x="5" y="62" width="12" height="6" fill="#10b981" />
-
-                <Rect x="35" y="35" width="30" height="30" fill="#1d4ed8" rx="3" />
-                <Rect x="40" y="40" width="20" height="20" fill="#080d19" rx="1.5" />
-                <Rect x="46" y="46" width="8" height="8" fill="#10b981" rx="0.5" />
-
-                <Rect x="75" y="35" width="10" height="10" fill="#1d4ed8" />
-                <Rect x="85" y="50" width="8" height="14" fill="#1d4ed8" />
-                <Rect x="75" y="65" width="14" height="6" fill="#1d4ed8" />
-
-                <Rect x="35" y="75" width="12" height="8" fill="#1d4ed8" />
-                <Rect x="52" y="82" width="8" height="10" fill="#1d4ed8" />
-                <Rect x="42" y="90" width="18" height="5" fill="#10b981" />
-
-                <Rect x="75" y="75" width="8" height="8" fill="#10b981" rx="1" />
-                <Rect x="88" y="88" width="10" height="10" fill="#1d4ed8" rx="1" />
-              </Svg>
-            </View>
 
             <Text style={styles.qrUser}>My Device (You)</Text>
             <Text style={styles.qrId}>NODE_MESH_V4.2</Text>
