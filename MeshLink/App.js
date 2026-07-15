@@ -15,10 +15,24 @@ import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 // Dynamic wrappers to resolve screen components on demand without static top-level imports
+
+const LoginScreen = (props) => {
+  const Screen = require('./Screens/login/login').default;
+  return <Screen {...props} />;
+}
+const AccountScreen = (props) => {
+  const Screen = require('./Screens/login/account').default;
+  return <Screen {...props} />;
+};
+const PinScreen = (props) => {
+  const Screen = require('./Screens/login/pin').default;
+  return <Screen {...props} />;
+};
 const HomeScreen = (props) => {
   const Screen = require('./Screens/HomeScreen').default;
   return <Screen {...props} />;
@@ -63,7 +77,7 @@ function MainTabsScreen({
           onDeleteChat={handleDeleteChat}
         />
       )}
-      
+
       {activeTab === 'Network' && (
         <NetworkScreen
           onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
@@ -214,7 +228,21 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <NavigationContainer ref={navigationRef}>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
+            <Stack.Screen name="Login">
+              {(props) => (
+                <LoginScreen
+                  {...props}
+                  onLoginSuccess={() => props.navigation.replace('Main')}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Pin">
+              {(props) => <PinScreen {...props} />}
+            </Stack.Screen>
+            <Stack.Screen name="CreateAccount">
+              {(props) => <AccountScreen {...props} />}
+            </Stack.Screen>
             <Stack.Screen name="Main">
               {(props) => (
                 <MainTabsScreen
