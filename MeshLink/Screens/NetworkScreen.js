@@ -16,7 +16,7 @@ export default function NetworkScreen({
 }) {
   const [networkUptime, setNetworkUptime] = useState(18);
 
-  // Uptime ticker
+
   useEffect(() => {
     const interval = setInterval(() => {
       setNetworkUptime(prev => prev + 1);
@@ -27,7 +27,7 @@ export default function NetworkScreen({
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       
-      {/* Header Section */}
+    
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <MaterialCommunityIcons name="sitemap" size={24} color="#a5b4fc" style={styles.logoIcon} />
@@ -38,7 +38,7 @@ export default function NetworkScreen({
         </TouchableOpacity>
       </View>
 
-      {/* Metrics Grid (2x2) */}
+      
       <View style={styles.metricsGrid}>
         <View style={styles.metricsRow}>
           <View style={styles.metricBox}>
@@ -63,9 +63,9 @@ export default function NetworkScreen({
         </View>
       </View>
 
-      {/* Topology Mapping Visualization Card */}
+     
       <View style={styles.topologyCard}>
-        {/* Header inside topology card */}
+     
         <View style={styles.topologyCardHeader}>
           <View style={styles.meshActivePill}>
             <View style={styles.meshActiveDot} />
@@ -73,11 +73,10 @@ export default function NetworkScreen({
           </View>
         </View>
 
-        {/* SVG Visualizer Container */}
+    
         <View style={styles.svgContainer}>
           <Svg width="100%" height="220" viewBox="0 0 340 220">
-            {/* Hops/Capsule Loops */}
-            {/* Left Loop */}
+           
             <Rect x="20" y="55" width="80" height="120" rx="40" ry="40" fill="none" stroke="rgba(165, 180, 252, 0.12)" strokeWidth="1.5" />
             
             {/* Center Loop */}
@@ -86,21 +85,18 @@ export default function NetworkScreen({
             {/* Right Loop */}
             <Rect x="185" y="40" width="120" height="150" rx="60" ry="60" fill="none" stroke="rgba(165, 180, 252, 0.18)" strokeWidth="1.5" />
 
-            {/* Small solid relay dots sat on loop borders */}
+           
             <Circle cx="70" cy="85" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
             <Circle cx="90" cy="160" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
             <Circle cx="100" cy="85" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
 
-            {/* Dashed Connecting Routes */}
-            {/* Center Operator -> Alex (Relay) */}
+            
             <Line x1="140" y1="120" x2="250" y2="70" stroke="#a5b4fc" strokeWidth="2" strokeDasharray="6, 4" />
             
-            {/* Alex (Relay) -> Sam */}
+      
             <Line x1="250" y1="70" x2="230" y2="175" stroke="#a5b4fc" strokeWidth="2" strokeDasharray="6, 4" strokeOpacity={0.8} />
           </Svg>
 
-          {/* Absolute Interactive Nodes */}
-          {/* Central Node (Operator) */}
           <TouchableOpacity 
             style={[styles.nodeOperatorContainer, { left: 140 - 22, top: 120 - 22 }]}
             activeOpacity={0.85}
@@ -111,7 +107,7 @@ export default function NetworkScreen({
             </View>
           </TouchableOpacity>
 
-          {/* Alex (Relay) Node */}
+         
           <TouchableOpacity 
             style={[styles.nodeRelayContainer, { left: 250 - 30, top: 70 - 25 }]}
             activeOpacity={0.85}
@@ -123,7 +119,7 @@ export default function NetworkScreen({
             <Text style={styles.nodeLabel}>Alex (Relay)</Text>
           </TouchableOpacity>
 
-          {/* Sam Node */}
+       
           <TouchableOpacity 
             style={[styles.nodeRelayContainer, { left: 230 - 30, top: 175 - 25 }]}
             activeOpacity={0.85}
@@ -146,7 +142,7 @@ export default function NetworkScreen({
         </View>
       </View>
 
-      {/* Info Banner */}
+
       <View style={styles.routingBanner}>
         <View style={styles.routingIconWrapper}>
           <MaterialCommunityIcons name="routes" size={24} color="#a5b4fc" />
@@ -156,9 +152,9 @@ export default function NetworkScreen({
         </Text>
       </View>
 
-      {/* Bottom Diagnostics Grid (1x2) */}
+     
       <View style={styles.bottomGrid}>
-        {/* Box 1: Signal Strength */}
+        
         <View style={styles.bottomGridBox}>
           <Text style={styles.bottomBoxTitle}>Signal Strength</Text>
           <View style={styles.signalBarsWrapper}>
@@ -169,7 +165,7 @@ export default function NetworkScreen({
           </View>
         </View>
 
-        {/* Box 2: Latency */}
+       
         <View style={styles.bottomGridBox}>
           <Text style={styles.bottomBoxTitle}>Latency</Text>
           <Text style={styles.latencyValue}>42ms</Text>

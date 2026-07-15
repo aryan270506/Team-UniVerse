@@ -28,7 +28,7 @@ export default function ChatScreen({
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);
   const chatScrollRef = useRef();
 
-  // Scroll to end when messages list changes
+ 
   useEffect(() => {
     if (chatScrollRef.current) {
       setTimeout(() => {
@@ -46,7 +46,7 @@ export default function ChatScreen({
   const handleSendImage = async () => {
     setShowAttachmentMenu(false);
     
-    // Stagger presentation of system picker to prevent modal transition clash
+  
     setTimeout(async () => {
       try {
         if (!ImagePicker || !ImagePicker.requestMediaLibraryPermissionsAsync || !ImagePicker.launchImageLibraryAsync) {
@@ -79,12 +79,12 @@ export default function ChatScreen({
         }
       } catch (err) {
         console.warn("Native ImagePicker failed, falling back to simulated file selection.", err);
-        // Fallback: simulate picking a premium image attachment
+       
         onSendMessage("Sent an image", {
           isImage: true,
           fileName: `mesh_snapshot_sys_${Math.floor(Math.random() * 90 + 10)}.jpg`,
           fileSize: "1.6 MB",
-          imageUri: null // Falls back to default beautiful scenery icon bubble
+          imageUri: null 
         });
       }
     }, 450);
@@ -93,7 +93,7 @@ export default function ChatScreen({
   const handleSendDocument = async () => {
     setShowAttachmentMenu(false);
     
-    // Stagger document presentation to clear the animated modal sheet view controller
+   
     setTimeout(async () => {
       try {
         if (!DocumentPicker || !DocumentPicker.getDocumentAsync) {
@@ -120,7 +120,7 @@ export default function ChatScreen({
         }
       } catch (err) {
         console.warn("Native DocumentPicker failed, falling back to simulated document selection.", err);
-        // Fallback: simulate picking a premium document attachment
+     
         onSendMessage("Sent a document", {
           isDocument: true,
           fileName: `transceiver_log_sec_${Math.floor(Math.random() * 800 + 100)}.pdf`,
@@ -283,7 +283,6 @@ export default function ChatScreen({
         })}
       </ScrollView>
 
-      {/* Input area positioned relative to bottom bar */}
       <View style={styles.chatInputWrapper}>
         <TouchableOpacity 
           style={styles.chatAttachButton} 
@@ -312,7 +311,7 @@ export default function ChatScreen({
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Tab Navigation Bar */}
+      {/* Bottom Tab */}
       <View style={styles.bottomTabBar}>
         <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={onBack}>
           <MaterialCommunityIcons name="account-group" size={24} color="#94a3b8" style={styles.inactiveIcon} />
@@ -634,7 +633,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: '500',
   },
-  // ATTACHMENT AND MODAL OPTIONS STYLES
+ //Attachment file 
   optionsModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(5, 10, 18, 0.65)',
