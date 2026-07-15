@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 const SignalIndicator = ({ level }) => {
   if (level === 'STRONG') {
@@ -76,7 +77,7 @@ export default function HomeScreen({
     Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
-        duration: 5000,
+        duration: 3000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
@@ -213,20 +214,84 @@ export default function HomeScreen({
             activeOpacity={0.85}
             onPress={onTriggerSOS}
           >
-            <View style={styles.radarRingOuter}>
-              <View style={styles.radarRingMiddle}>
-                <View style={styles.radarRingInner}>
-                  <View style={styles.radarCenterCore}>
-                    <View style={styles.radarCoreHighlight} />
-                    <View style={styles.radarCorePulse} />
-                  </View>
-                </View>
-              </View>
-            </View>
+            {/* SVG High-Fidelity Tactical Radar */}
+            <Svg width="220" height="220" viewBox="0 0 220 220" style={StyleSheet.absoluteFill}>
+              {/* Faint Background Grid Lines */}
+              {/* Vertical Grid Lines */}
+              <Line x1="22" y1="0" x2="22" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="44" y1="0" x2="44" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="66" y1="0" x2="66" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="88" y1="0" x2="88" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="132" y1="0" x2="132" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="154" y1="0" x2="154" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="176" y1="0" x2="176" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="198" y1="0" x2="198" y2="220" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              
+              {/* Horizontal Grid Lines */}
+              <Line x1="0" y1="22" x2="220" y2="22" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="44" x2="220" y2="44" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="66" x2="220" y2="66" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="88" x2="220" y2="88" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="132" x2="220" y2="132" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="154" x2="220" y2="154" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="176" x2="220" y2="176" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
+              <Line x1="0" y1="198" x2="220" y2="198" stroke="rgba(30, 41, 59, 0.25)" strokeWidth="0.75" />
 
+              {/* Center Crosshairs */}
+              <Line x1="110" y1="0" x2="110" y2="220" stroke="rgba(29, 78, 216, 0.2)" strokeWidth="1.5" />
+              <Line x1="0" y1="110" x2="220" y2="110" stroke="rgba(29, 78, 216, 0.2)" strokeWidth="1.5" />
+
+              {/* Faint Concentric Radar Rings */}
+              <Circle cx="110" cy="110" r="22" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="44" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="66" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="88" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="110" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+
+              {/* Sarah Chen (Strong) - Signal Blue/Green */}
+              <Circle cx="154" cy="65" r="8" fill="rgba(16, 185, 129, 0.2)" />
+              <Circle cx="154" cy="65" r="4" fill="#10b981" />
+
+              {/* Marcus Thorne (Fair) - Amber */}
+              <Circle cx="66" cy="88" r="8" fill="rgba(251, 191, 36, 0.2)" />
+              <Circle cx="66" cy="88" r="4" fill="#fbbf24" />
+
+              {/* Elena Rodriguez (Offline/Poor) - Gray/Offline */}
+              <Circle cx="132" cy="176" r="8" fill="rgba(107, 114, 128, 0.2)" />
+              <Circle cx="132" cy="176" r="4" fill="#6b7280" />
+
+              {/* Extra Unidentified Node (Amber) */}
+              <Circle cx="60" cy="150" r="6" fill="rgba(29, 78, 216, 0.15)" />
+              <Circle cx="60" cy="150" r="3" fill="#3b82f6" />
+            </Svg>
+
+            {/* Sweep overlay (Rotated via Animated.View) */}
             <Animated.View style={[styles.radarSweepWrapper, { transform: [{ rotate: rotateSpin }] }]}>
-              <View style={styles.radarSweepQuadrant} />
+              <Svg width="220" height="220" viewBox="0 0 220 220">
+                {/* Conic/Angular sweep trail using adjacent 9-degree wedges */}
+                <Path d="M 110 110 L 92.8 1.4 A 110 110 0 0 1 110 0 Z" fill="#1D4ED8" fillOpacity={0.45} />
+                <Path d="M 110 110 L 76.0 5.4 A 110 110 0 0 1 92.8 1.4 Z" fill="#1D4ED8" fillOpacity={0.40} />
+                <Path d="M 110 110 L 60.1 12.0 A 110 110 0 0 1 76.0 5.4 Z" fill="#1D4ED8" fillOpacity={0.35} />
+                <Path d="M 110 110 L 45.3 21.0 A 110 110 0 0 1 60.1 12.0 Z" fill="#1D4ED8" fillOpacity={0.30} />
+                <Path d="M 110 110 L 32.2 32.2 A 110 110 0 0 1 45.3 21.0 Z" fill="#1D4ED8" fillOpacity={0.25} />
+                <Path d="M 110 110 L 21.0 45.3 A 110 110 0 0 1 32.2 32.2 Z" fill="#1D4ED8" fillOpacity={0.20} />
+                <Path d="M 110 110 L 12.0 60.1 A 110 110 0 0 1 21.0 45.3 Z" fill="#1D4ED8" fillOpacity={0.15} />
+                <Path d="M 110 110 L 5.4 76.0 A 110 110 0 0 1 12.0 60.1 Z" fill="#1D4ED8" fillOpacity={0.10} />
+                <Path d="M 110 110 L 1.4 92.8 A 110 110 0 0 1 5.4 76.0 Z" fill="#1D4ED8" fillOpacity={0.05} />
+                <Path d="M 110 110 L 0 110 A 110 110 0 0 1 1.4 92.8 Z" fill="#1D4ED8" fillOpacity={0.02} />
+
+                {/* Bright sweep leading edge line (Stick) */}
+                <Line x1="110" y1="110" x2="110" y2="0" stroke="#3b82f6" strokeWidth="2.5" />
+                {/* Extra bright core highlight line */}
+                <Line x1="110" y1="110" x2="110" y2="0" stroke="#ffffff" strokeWidth="0.75" strokeOpacity="0.8" />
+              </Svg>
             </Animated.View>
+
+            {/* Center Core Dot */}
+            <View style={styles.radarCenterCore}>
+              <View style={styles.radarCoreHighlight} />
+              <View style={styles.radarCorePulse} />
+            </View>
           </TouchableOpacity>
 
           <Animated.Text style={[styles.scanningText, { opacity: pulseAnim }]}>

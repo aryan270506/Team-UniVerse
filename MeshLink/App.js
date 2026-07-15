@@ -15,10 +15,24 @@ import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 // Dynamic wrappers to resolve screen components on demand without static top-level imports
+
+const LoginScreen = (props) => {
+  const Screen = require('./Screens/login/login').default;
+  return <Screen {...props} />;
+}
+const AccountScreen = (props) => {
+  const Screen = require('./Screens/login/account').default;
+  return <Screen {...props} />;
+};
+const PinScreen = (props) => {
+  const Screen = require('./Screens/login/pin').default;
+  return <Screen {...props} />;
+};
 const HomeScreen = (props) => {
   const Screen = require('./Screens/HomeScreen').default;
   return <Screen {...props} />;
@@ -52,7 +66,6 @@ function MainTabsScreen({
 }) {
   return (
     <View style={styles.contentWrapper}>
-      {/* Active Tab Screen */}
       {activeTab === 'Peers' && (
         <HomeScreen
           peers={peers}
@@ -63,23 +76,20 @@ function MainTabsScreen({
           onDeleteChat={handleDeleteChat}
         />
       )}
-      
+
       {activeTab === 'Network' && (
         <NetworkScreen
           onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
         />
       )}
-      
+
       {activeTab === 'Profile' && (
-        <ProfileScreen
-          peers={peers}
-        />
+        <ProfileScreen peers={peers} />
       )}
 
-      {/* Bottom Tab Bar */}
       <View style={styles.bottomTabBar}>
-        <TouchableOpacity 
-          style={styles.tabItem} 
+        <TouchableOpacity
+          style={styles.tabItem}
           activeOpacity={0.7}
           onPress={() => setActiveTab('Peers')}
         >
@@ -93,8 +103,8 @@ function MainTabsScreen({
           <Text style={[styles.tabLabel, activeTab === 'Peers' && styles.activeTabLabel]}>Peers</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.tabItem} 
+        <TouchableOpacity
+          style={styles.tabItem}
           activeOpacity={0.7}
           onPress={() => setActiveTab('Profile')}
         >
@@ -113,8 +123,8 @@ function MainTabsScreen({
           <Text style={styles.tabLabel}>SOS</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.tabItem} 
+        <TouchableOpacity
+          style={styles.tabItem}
           activeOpacity={0.7}
           onPress={() => setActiveTab('Network')}
         >
@@ -135,12 +145,10 @@ function MainTabsScreen({
 export default function App() {
 
   const [activeTab, setActiveTab] = useState('Peers');
-  
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
   const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
 
-  // Mesh Network Data States
   const [peers, setPeers] = useState([
     { name: 'Sarah Chen', status: 'Connected • 12m', level: 'STRONG', avatarStatusColor: '#10b981', added: true },
     { name: 'Marcus Thorne', status: 'Relay Node • 45m', level: 'FAIR', avatarStatusColor: '#fbbf24', added: true },
@@ -164,7 +172,6 @@ export default function App() {
     ]
   });
 
-  
   const handleAddPeer = (newPeer) => {
     setPeers(prev => [...prev, newPeer]);
   };
@@ -227,7 +234,21 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <NavigationContainer ref={navigationRef} theme={navTheme}>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
+            <Stack.Screen name="Login">
+              {(props) => (
+                <LoginScreen
+                  {...props}
+                  onLoginSuccess={() => props.navigation.replace('Main')}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Pin">
+              {(props) => <PinScreen {...props} />}
+            </Stack.Screen>
+            <Stack.Screen name="CreateAccount">
+              {(props) => <AccountScreen {...props} />}
+            </Stack.Screen>
             <Stack.Screen name="Main">
               {(props) => (
                 <MainTabsScreen
@@ -279,7 +300,7 @@ export default function App() {
           </Stack.Navigator>
         </NavigationContainer>
 
-        {/* SOS Confirmation  */}
+        {/* SOS Confirmation */}
         <Modal
           visible={showConfirmModal}
           transparent={true}
@@ -295,18 +316,18 @@ export default function App() {
               <Text style={styles.modalDescription}>
                 Are you sure you want to start broadcasting an emergency SOS to everyone nearby?
               </Text>
-              
+
               <View style={styles.modalButtonsRow}>
-                <TouchableOpacity 
-                  style={styles.modalCancelButton} 
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
                   activeOpacity={0.8}
                   onPress={() => setShowConfirmModal(false)}
                 >
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.modalConfirmButton} 
+
+                <TouchableOpacity
+                  style={styles.modalConfirmButton}
                   activeOpacity={0.8}
                   onPress={() => {
                     setShowConfirmModal(false);
@@ -322,7 +343,7 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* SOS Responder  */}
+        {/* SOS Responder */}
         <Modal
           visible={showSOSOptionsModal}
           transparent={true}
@@ -332,9 +353,9 @@ export default function App() {
           <View style={styles.optionsModalOverlay}>
             <BlurView intensity={35} tint="dark" style={styles.glassOptionsCard}>
               <Text style={styles.optionsModalTitle}>{selectedPeerOptions ? selectedPeerOptions.name : ''}</Text>
-              
+
               <View style={styles.optionsList}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.optionItem}
                   activeOpacity={0.7}
                   onPress={() => {
@@ -342,18 +363,18 @@ export default function App() {
                     handleToggleContactStatus(selectedPeerOptions.name);
                   }}
                 >
-                  <Feather 
-                    name={selectedPeerOptions && selectedPeerOptions.added ? "user-minus" : "user-plus"} 
-                    size={20} 
-                    color="#a5b4fc" 
-                    style={styles.optionIcon} 
+                  <Feather
+                    name={selectedPeerOptions && selectedPeerOptions.added ? "user-minus" : "user-plus"}
+                    size={20}
+                    color="#a5b4fc"
+                    style={styles.optionIcon}
                   />
                   <Text style={styles.optionText}>
                     {selectedPeerOptions && selectedPeerOptions.added ? "Remove Contact" : "Add Contact"}
                   </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.optionItem}
                   activeOpacity={0.7}
                   onPress={() => {
@@ -369,7 +390,7 @@ export default function App() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.optionsCancelButton}
                 activeOpacity={0.8}
                 onPress={() => setShowSOSOptionsModal(false)}
@@ -403,7 +424,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingBottom: Platform.OS === 'ios' ? 4 : 0, 
+    paddingBottom: Platform.OS === 'ios' ? 4 : 0,
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -529,7 +550,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(23, 34, 59, 0.4)', 
+    backgroundColor: 'rgba(23, 34, 59, 0.4)',
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: -10 },
