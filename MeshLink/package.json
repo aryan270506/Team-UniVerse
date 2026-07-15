@@ -8,6 +8,7 @@
     "expo-blur": "~57.0.0",
     "expo-document-picker": "~57.0.0",
     "expo-image-picker": "~57.0.2",
+    "expo-location": "~57.0.2",
     "expo-status-bar": "~57.0.0",
     "react": "19.2.3",
     "react-native": "0.86.0",
