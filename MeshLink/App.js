@@ -94,7 +94,11 @@ function MainTabsScreen({
       )}
 
       {activeTab === 'Profile' && (
-        <ProfileScreen peers={peers} onNavigateToNetwork={() => setActiveTab('Network')} />
+        <ProfileScreen
+          peers={peers}
+          onNavigateToNetwork={() => setActiveTab('Network')}
+          onNavigateToProfile={() => setActiveTab('Profile')}
+        />
       )}
 
       <View style={styles.bottomTabBar}>

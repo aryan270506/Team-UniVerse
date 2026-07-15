@@ -13,7 +13,9 @@ import {
   Image,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
+import { setStoredPin } from '../Helper/UserIdentity';
 
 // ─── Fake QR Code ─────────────────────────────────────────────────────────────
 const QRCodePlaceholder = () => {
@@ -107,7 +109,7 @@ const pinStyles = StyleSheet.create({
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
+export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavigateToProfile }) {
   const [displayName, setDisplayName] = useState('Alex Rivera');
   const [profilePhoto, setProfilePhoto] = useState(null);
   const meshNodesCount = 12;
@@ -150,24 +152,20 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
 
   // ── Change PIN modal ──
   const [pinModalVisible, setPinModalVisible] = useState(false);
-  const [pinStep, setPinStep] = useState('current'); // 'current' | 'new' | 'confirm'
-  const [currentPinInput, setCurrentPinInput] = useState('');
+  const [pinStep, setPinStep] = useState('new'); // 'new' | 'confirm'
   const [newPinInput, setNewPinInput] = useState('');
   const [confirmPinInput, setConfirmPinInput] = useState('');
 
   const openPinModal = () => {
-    setPinStep('current');
-    setCurrentPinInput('');
+    setPinStep('new');
     setNewPinInput('');
     setConfirmPinInput('');
     setPinModalVisible(true);
   };
 
   const handlePinKey = (k) => {
-    const setter = pinStep === 'current' ? setCurrentPinInput
-      : pinStep === 'new' ? setNewPinInput : setConfirmPinInput;
-    const getter = pinStep === 'current' ? currentPinInput
-      : pinStep === 'new' ? newPinInput : confirmPinInput;
+    const setter = pinStep === 'new' ? setNewPinInput : setConfirmPinInput;
+    const getter = pinStep === 'new' ? newPinInput : confirmPinInput;
 
     if (k === '⌫') {
       setter(getter.slice(0, -1));
@@ -179,20 +177,14 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
 
     if (next.length === 4) {
       setTimeout(() => {
-        if (pinStep === 'current') {
-          setPinStep('new');
-          setCurrentPinInput('');
-        } else if (pinStep === 'new') {
+        if (pinStep === 'new') {
           setPinStep('confirm');
           setNewPinInput(next);
         } else {
           if (next === newPinInput) {
-            setPinModalVisible(false);
-            Alert.alert('PIN Changed', 'Your new PIN has been saved successfully.');
+            Alert.alert('PINs match', 'Tap Confirm and Save to finish updating your PIN.');
           } else {
             Alert.alert('Mismatch', 'PINs do not match. Please try again.');
-            setPinStep('new');
-            setNewPinInput('');
             setConfirmPinInput('');
           }
         }
@@ -200,10 +192,25 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
     }
   };
 
-  const pinStepLabel = pinStep === 'current' ? 'Enter Current PIN'
-    : pinStep === 'new' ? 'Enter New PIN' : 'Confirm New PIN';
-  const pinActive = pinStep === 'current' ? currentPinInput
-    : pinStep === 'new' ? newPinInput : confirmPinInput;
+  const handleSavePin = () => {
+    if (confirmPinInput !== newPinInput || confirmPinInput.length !== 4) {
+      Alert.alert('Mismatch', 'PINs do not match. Please try again.');
+      return;
+    }
+
+    setStoredPin(confirmPinInput).then(() => {
+      setPinModalVisible(false);
+      onNavigateToProfile && onNavigateToProfile();
+      Alert.alert('PIN Changed', 'Your new PIN has been saved successfully.');
+    });
+  };
+
+  const pinStepLabel = pinStep === 'new' ? 'Enter New PIN' : 'Confirm New PIN';
+  const pinActive = pinStep === 'new' ? newPinInput : confirmPinInput;
+  const pinReadyToSave = pinStep === 'confirm' && confirmPinInput.length === 4 && confirmPinInput === newPinInput;
+  const pinStepSubtitle = pinStep === 'new'
+    ? 'Choose a new 4-digit PIN.'
+    : 'Re-enter the same PIN to verify it before saving.';
 
   // ── About modal ──
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
@@ -261,6 +268,22 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
           </View>
         </View>
 
+        {/* Notification */}
+        <View style={styles.notificationWrap}>
+          <BlurView intensity={30} tint="dark" style={styles.notificationGlass}>
+            <View style={styles.notificationGlow} />
+            <View style={styles.notificationContent}>
+              <View style={styles.notificationIconWrap}>
+                <MaterialCommunityIcons name="bell-ring-outline" size={18} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.notificationTitle}>Notification</Text>
+                <Text style={styles.notificationText}>Your mesh profile is active and ready to sync with nearby nodes.</Text>
+              </View>
+            </View>
+          </BlurView>
+        </View>
+
         {/* QR / Identity Key */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
@@ -305,14 +328,7 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
             rightIcon="open-in-new"
           />
           <View style={styles.divider} />
-          <SettingRow
-            icon="refresh"
-            label="Regenerate Identity"
-            subLabel="WARNING: IRREVERSIBLE ACTION"
-            onPress={handleRegenerateIdentity}
-            danger
-            rightIcon="alert-outline"
-          />
+          
         </View>
 
         {/* Stats */}
@@ -364,6 +380,7 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
           <View style={[styles.modalSheet, { paddingBottom: 32 }]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{pinStepLabel}</Text>
+            <Text style={styles.modalSubtitle}>{pinStepSubtitle}</Text>
 
             {/* PIN dots */}
             <View style={styles.pinDotsRow}>
@@ -372,7 +389,33 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork }) {
               ))}
             </View>
 
+            {pinStep === 'confirm' && (
+              <View style={styles.pinMatchNote}>
+                <MaterialCommunityIcons
+                  name={pinReadyToSave ? 'check-circle' : 'shield-key-outline'}
+                  size={18}
+                  color={pinReadyToSave ? '#34d399' : '#9EB1FF'}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.pinMatchText, pinReadyToSave && styles.pinMatchTextReady]}>
+                  {pinReadyToSave ? 'PINs match. Ready to save.' : 'Enter the same PIN again.'}
+                </Text>
+              </View>
+            )}
+
             <PinKeypad pin={pinActive} onKey={handlePinKey} />
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleSavePin}
+              disabled={!pinReadyToSave}
+              style={[
+                styles.modalBtnPrimary,
+                { marginTop: 20, opacity: pinReadyToSave ? 1 : 0.45 },
+              ]}
+            >
+              <Text style={styles.modalBtnPrimaryText}>Confirm and Save</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity style={{ marginTop: 16, alignSelf: 'center' }} onPress={() => setPinModalVisible(false)}>
               <Text style={{ color: '#9EB1FF', fontSize: 14 }}>Cancel</Text>
@@ -474,6 +517,38 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' },
   statusText: { color: '#10b981', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
 
+  notificationWrap: { marginHorizontal: 16, marginBottom: 18 },
+  notificationGlass: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  notificationGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(63,127,255,0.10)',
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  notificationIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(63,127,255,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  notificationTitle: { color: '#ffffff', fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  notificationText: { color: '#c9d4ff', fontSize: 12, lineHeight: 18 },
+
   card: {
     marginHorizontal: 16, backgroundColor: '#0f1829',
     borderRadius: 16, padding: 18,
@@ -574,6 +649,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   pinDotFilled: { backgroundColor: '#4A78FF', borderColor: '#4A78FF' },
+  pinMatchNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -8,
+    marginBottom: 10,
+  },
+  pinMatchText: { color: '#9EB1FF', fontSize: 13, fontWeight: '600' },
+  pinMatchTextReady: { color: '#34d399' },
 
   // About
   aboutHeader: { alignItems: 'center', paddingVertical: 20 },

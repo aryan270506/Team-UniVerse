@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getStoredPin } from '../../Helper/UserIdentity';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const PIN_LENGTH = 4;
@@ -75,7 +76,22 @@ export default function PinScreen({ navigation }) {
   const keyFontSize = isWide ? 26 : 22;
 
   const [pin, setPin] = useState('');
+  const [storedPin, setStoredPin] = useState(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let isActive = true;
+
+    getStoredPin().then((savedPin) => {
+      if (isActive) {
+        setStoredPin(savedPin);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   // Shake animation on wrong PIN
   const triggerShake = () => {
@@ -88,14 +104,20 @@ export default function PinScreen({ navigation }) {
     ]).start();
   };
 
-  // Auto-submit when 4 digits entered — any PIN is accepted
+  // Auto-submit when 4 digits entered — compare against the saved PIN
   useEffect(() => {
-    if (pin.length === PIN_LENGTH) {
+    if (pin.length === PIN_LENGTH && storedPin) {
       setTimeout(() => {
-        navigation.replace('Main');
+        if (pin === storedPin) {
+          navigation.replace('Main');
+        } else {
+          triggerShake();
+          Alert.alert('Incorrect PIN', 'The PIN you entered is not correct.');
+          setPin('');
+        }
       }, 150);
     }
-  }, [pin]);
+  }, [pin, storedPin]);
 
   const handleKey = (key) => {
     if (key === 'biometric') {
