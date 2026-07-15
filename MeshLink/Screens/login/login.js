@@ -97,9 +97,6 @@ export default function login({ navigation }) {
   }, [cursorOpacity]);
 
   // Button handlers
-  const onLogin = () => {
-    navigation.navigate('Pin');
-  };
   const onCreate = () => {
     navigation.navigate('CreateAccount');
   };
@@ -327,22 +324,14 @@ export default function login({ navigation }) {
         </View>
       </View>
 
-      {/* Bottom buttons + chip */}
+      {/* Bottom button + chip */}
       <View style={dynamic.contentWrap}>
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={onLogin}
+          onPress={onCreate}
           style={[dynamic.btn, dynamic.btnPrimary]}
         >
-          <Text style={dynamic.btnPrimaryText}>Log In</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={onCreate}
-          style={[dynamic.btn, dynamic.btnSecondary]}
-        >
-          <Text style={dynamic.btnSecondaryText}>Create Account</Text>
+          <Text style={dynamic.btnPrimaryText}>Sign Up</Text>
         </TouchableOpacity>
 
         <View style={dynamic.chip}>

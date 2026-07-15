@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getPin, getOrCreateDeviceId } from '../../Helper/UserIdentity';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const PIN_LENGTH = 4;
+const PIN_LENGTH = 6;
 
 // ─── Keypad layout ────────────────────────────────────────────────────────────
 const KEYS = [
@@ -75,7 +76,21 @@ export default function PinScreen({ navigation }) {
   const keyFontSize = isWide ? 26 : 22;
 
   const [pin, setPin] = useState('');
+  const [storedPin, setStoredPin] = useState(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Load the stored PIN on mount
+  useEffect(() => {
+    async function loadPin() {
+      try {
+        const savedPin = await getPin();
+        setStoredPin(savedPin);
+      } catch (e) {
+        console.error('Failed to load stored pin', e);
+      }
+    }
+    loadPin();
+  }, []);
 
   // Shake animation on wrong PIN
   const triggerShake = () => {
@@ -88,14 +103,26 @@ export default function PinScreen({ navigation }) {
     ]).start();
   };
 
-  // Auto-submit when 4 digits entered — any PIN is accepted
+  // Auto-submit when 6 digits entered
   useEffect(() => {
     if (pin.length === PIN_LENGTH) {
-      setTimeout(() => {
-        navigation.replace('Main');
+      setTimeout(async () => {
+        if (storedPin && pin !== storedPin) {
+          triggerShake();
+          setPin('');
+          Alert.alert('Incorrect PIN', 'The PIN you entered is incorrect. Please try again.');
+        } else {
+          try {
+            const deviceId = await getOrCreateDeviceId();
+            console.log(`[MeshLink Log] Device logged in. Device ID: ${deviceId}`);
+          } catch (e) {
+            console.error('Failed to log device ID', e);
+          }
+          navigation.replace('Main');
+        }
       }, 150);
     }
-  }, [pin]);
+  }, [pin, storedPin]);
 
   const handleKey = (key) => {
     if (key === 'biometric') {
@@ -207,16 +234,6 @@ export default function PinScreen({ navigation }) {
         >
           <Text style={styles.forgotText}>Forgot PIN?</Text>
         </TouchableOpacity>
-
-        <View style={styles.signupRow}>
-          <Text style={styles.signupText}>New here? </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('CreateAccount')}
-          >
-            <Text style={styles.signupLink}>Create an account</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </View>
   );

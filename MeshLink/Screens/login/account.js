@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { setPin, setDisplayName, getOrCreateDeviceId } from '../../Helper/UserIdentity';
 
 // Reuse the MeshLines background
 const MeshLines = () => {
@@ -31,9 +32,8 @@ export default function Account({ navigation }) {
   const { width, height } = useWindowDimensions();
   
   const [nodeName, setNodeName] = useState('');
-  const [passphrase, setPassphrase] = useState('');
-  const [showPassphrase, setShowPassphrase] = useState(false);
-  const [generatingKey, setGeneratingKey] = useState(false);
+  const [pin, setPinValue] = useState('');
+  const [showPin, setShowPin] = useState(false);
 
   // Responsive sizing
   const isWide = width >= 768;
@@ -42,65 +42,28 @@ export default function Account({ navigation }) {
   const titleSize = isWide ? 36 : 28;
   const subtitleSize = isWide ? 16 : 14;
 
-  // Animation for generating key
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let anim;
-    if (generatingKey) {
-      rotation.setValue(0);
-      anim = Animated.loop(
-        Animated.timing(rotation, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-      anim.start();
-    } else {
-      rotation.setValue(0);
-    }
-    return () => {
-      if (anim) anim.stop();
-    };
-  }, [generatingKey, rotation]);
-
-  const spin = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '36deg']
-  });
-
-  const handleGenerateKey = () => {
-    setGeneratingKey(true);
-    setTimeout(() => {
-      const randomWords = [
-        'pulse', 'mesh', 'beacon', 'node', 'relay', 'crypto', 
-        'secure', 'signal', 'link', 'quantum', 'matrix', 'vector'
-      ];
-      const generated = Array.from({ length: 4 }, () => 
-        randomWords[Math.floor(Math.random() * randomWords.length)]
-      ).join('-');
-      setPassphrase(generated);
-      setGeneratingKey(false);
-      Alert.alert('Key Generated', 'Write down this secure passphrase. It is your only way to restore your mesh node.');
-    }, 1500);
-  };
-
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     if (!nodeName.trim()) {
       Alert.alert('Error', 'Please enter a Node Name.');
       return;
     }
-    if (!passphrase.trim()) {
-      Alert.alert('Error', 'Please enter or generate a Passphrase.');
+    if (!pin.trim() || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      Alert.alert('Error', 'Please enter a 6-digit numeric PIN.');
       return;
     }
-    Alert.alert(
-      'Account Created', 
-      `Node "${nodeName}" initialized on P2P Mesh Network.`,
-      [{ text: 'Get Started', onPress: () => navigation.replace('Main') }]
-    );
+    try {
+      await setDisplayName(nodeName.trim());
+      await setPin(pin);
+      const deviceId = await getOrCreateDeviceId();
+      console.log(`[MeshLink Log] Device registered and logged in. Device ID: ${deviceId}`);
+      Alert.alert(
+        'Account Created', 
+        `Node "${nodeName}" initialized on P2P Mesh Network.`,
+        [{ text: 'Get Started', onPress: () => navigation.replace('Main') }]
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save account credentials.');
+    }
   };
 
   const dynamic = useMemo(
@@ -269,40 +232,28 @@ export default function Account({ navigation }) {
           </View>
 
           <View style={dynamic.inputGroup}>
-            <Text style={dynamic.label}>SECURE PASSPHRASE</Text>
+            <Text style={dynamic.label}>6-DIGIT SECURITY PIN</Text>
             <View style={dynamic.inputWrapper}>
-              <MaterialCommunityIcons name="key-variant" size={18} color="#9EB1FF" style={dynamic.inputIcon} />
+              <MaterialCommunityIcons name="lock-outline" size={18} color="#9EB1FF" style={dynamic.inputIcon} />
               <TextInput
                 style={dynamic.input}
-                placeholder="Enter passphrase or generate one"
+                placeholder="Enter 6-digit PIN"
                 placeholderTextColor="rgba(201, 212, 255, 0.4)"
-                value={passphrase}
-                onChangeText={setPassphrase}
-                secureTextEntry={!showPassphrase}
+                value={pin}
+                onChangeText={(val) => setPinValue(val.replace(/[^0-9]/g, '').slice(0, 6))}
+                secureTextEntry={!showPin}
+                keyboardType="numeric"
+                maxLength={6}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
               <TouchableOpacity 
                 style={dynamic.passwordToggle} 
-                onPress={() => setShowPassphrase(!showPassphrase)}
+                onPress={() => setShowPin(!showPin)}
               >
-                <Feather name={showPassphrase ? "eye-off" : "eye"} size={16} color="#9EB1FF" />
+                <Feather name={showPin ? "eye-off" : "eye"} size={16} color="#9EB1FF" />
               </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity 
-              style={dynamic.generateBtn} 
-              onPress={handleGenerateKey}
-              disabled={generatingKey}
-              activeOpacity={0.7}
-            >
-              <Animated.View style={generatingKey ? { transform: [{ rotate: spin }] } : null}>
-                <Feather name="refresh-cw" size={14} color="#3F7FFF" />
-              </Animated.View>
-              <Text style={dynamic.generateText}>
-                {generatingKey ? 'Generating Cryptographic Key...' : 'Generate Random Key'}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity

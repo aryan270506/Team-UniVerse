@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   Alert,
+  ActivityIndicator,
   StatusBar as RNStatusBar
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +15,7 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { isSignedUp } from './Helper/UserIdentity';
 
 
 const Stack = createNativeStackNavigator();
@@ -148,8 +150,23 @@ function MainTabsScreen({
 }
 
 export default function App() {
-
+  const [loading, setLoading] = useState(true);
+  const [isUserSignedUp, setIsUserSignedUp] = useState(false);
   const [activeTab, setActiveTab] = useState('Peers');
+
+  useEffect(() => {
+    async function checkUserSignup() {
+      try {
+        const signedUp = await isSignedUp();
+        setIsUserSignedUp(signedUp);
+      } catch (e) {
+        console.error('Failed to check user signup state', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkUserSignup();
+  }, []);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
   const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
@@ -235,11 +252,21 @@ export default function App() {
     },
   };
 
+  if (loading) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#3F7FFF" />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <NavigationContainer ref={navigationRef} theme={navTheme}>
-          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
+          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={isUserSignedUp ? "Pin" : "Login"}>
             <Stack.Screen name="Login">
               {(props) => (
                 <LoginScreen
