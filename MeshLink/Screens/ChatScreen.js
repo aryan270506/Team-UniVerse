@@ -10,6 +10,7 @@ import {
   Modal,
   Alert,
   Image,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -262,54 +263,68 @@ export default function ChatScreen({
                         <Text style={styles.attachmentName}>{msg.fileName}</Text>
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
-                      <Feather name="download" size={14} color="#a5b4fc" style={styles.attachmentDownloadIcon} />
+                          <Text style={styles.imagePlaceholderText}>Image Attachment</Text>
+                        </View>
+                      )}
+                      <Text style={styles.attachmentMetaText}>{msg.attachment.fileName} ({msg.attachment.fileSize})</Text>
                     </View>
-                  ) : (
-                    <Text style={styles.msgText}>{msg.text}</Text>
                   )}
-                </View>
-                <View style={styles.msgStatusRow}>
-                  <Text style={styles.msgTimeText}>{msg.time}</Text>
-                  {msg.status && (
-                    <>
-                      <MaterialCommunityIcons name="check-all" size={14} color="#818cf8" style={styles.deliveredIcon} />
-                      <Text style={styles.deliveredText}>{msg.status}</Text>
-                    </>
-                  )}
-                </View>
-              </View>
-            );
-          }
-        })}
-      </ScrollView>
 
-      <View style={styles.chatInputWrapper}>
-        <TouchableOpacity 
-          style={styles.chatAttachButton} 
-          activeOpacity={0.7}
-          onPress={() => setShowAttachmentMenu(true)}
-        >
-          <Feather name="plus" size={22} color="#94a3b8" />
-        </TouchableOpacity>
-        <View style={styles.chatTextInputContainer}>
-          <TextInput
-            placeholder="Type a secure message..."
-            placeholderTextColor="#4b5563"
-            style={styles.chatTextInput}
-            value={chatMessage}
-            onChangeText={setChatMessage}
-            onSubmitEditing={handleSend}
-          />
+                  {/* Handle Document Attachments */}
+                  {msg.attachment?.isDocument && (
+                    <View style={styles.docAttachmentContainer}>
+                      <View style={styles.docIconWrapper}>
+                        <Feather name="file-text" size={20} color="#1d4ed8" />
+                      </View>
+                      <View style={styles.docMeta}>
+                        <Text style={styles.docNameText} numberOfLines={1}>{msg.attachment.fileName}</Text>
+                        <Text style={styles.docSizeText}>{msg.attachment.fileSize}</Text>
+                      </View>
+                    </View>
+                  )}
+                  <View style={styles.msgStatusRow}>
+                    <Text style={styles.msgTimeText}>{msg.time}</Text>
+                    {msg.status && (
+                      <>
+                        <MaterialCommunityIcons name="check-all" size={14} color="#818cf8" style={styles.deliveredIcon} />
+                        <Text style={styles.deliveredText}>{msg.status}</Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+              );
+            }
+          })}
+        </ScrollView>
+
+        <View style={styles.chatInputWrapper}>
+          <TouchableOpacity 
+            style={styles.chatAttachButton} 
+            activeOpacity={0.7}
+            onPress={() => setShowAttachmentMenu(true)}
+          >
+            <Feather name="plus" size={22} color="#94a3b8" />
+          </TouchableOpacity>
+          <View style={styles.chatTextInputContainer}>
+            <TextInput
+              placeholder="Type a secure message..."
+              placeholderTextColor="#4b5563"
+              style={styles.chatTextInput}
+              value={chatMessage}
+              onChangeText={setChatMessage}
+              onSubmitEditing={handleSend}
+            />
+          </View>
+          <TouchableOpacity 
+            style={[styles.chatSendButton, !chatMessage.trim() && { opacity: 0.6 }]} 
+            activeOpacity={0.8}
+            onPress={handleSend}
+            disabled={!chatMessage.trim()}
+          >
+            <Feather name="send" size={18} color="#080e1b" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
-          style={[styles.chatSendButton, !chatMessage.trim() && { opacity: 0.6 }]} 
-          activeOpacity={0.8}
-          onPress={handleSend}
-          disabled={!chatMessage.trim()}
-        >
-          <Feather name="send" size={18} color="#080e1b" />
-        </TouchableOpacity>
-      </View>
+      </KeyboardAvoidingView>
 
       {/* Bottom Tab */}
       <View style={styles.bottomTabBar}>
@@ -384,6 +399,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#060a13',
     width: '100%',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   chatHeader: {
     flexDirection: 'row',
