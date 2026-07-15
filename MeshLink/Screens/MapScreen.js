@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,9 +6,12 @@ import {
   Platform,
   StatusBar as RNStatusBar,
   Animated,
+  Easing,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, G, Text as SvgText } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function MapScreen({
   navigation,
@@ -18,10 +20,12 @@ export default function MapScreen({
 }) {
   const [selectedPeer, setSelectedPeer] = useState(null);
 
-  // Animations for glowing dots
+  // Animations for glowing dots and sweep
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Pulse animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -36,7 +40,22 @@ export default function MapScreen({
         })
       ])
     ).start();
-  }, [pulseAnim]);
+
+    // Sweep rotation animation
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 3000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [pulseAnim, rotateAnim]);
+
+  const rotateSpin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Peer coordinates on the tactical coordinate map
   // Sarah Chen (Strong) - Near top right
@@ -69,6 +88,7 @@ export default function MapScreen({
       </View>
 
       <View style={styles.mapContainer}>
+        {/* Layer 1: Background grid, terrain curves, and concentric radar rings */}
         <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
           {/* Tactical Background Coordinate Grid */}
           {/* Horizontal lines */}
@@ -102,63 +122,91 @@ export default function MapScreen({
           <Path d="M 300 -20 Q 320 200 290 340 T 310 540" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
 
           {/* Core Radar reference lines */}
-          <Circle cx="180" cy="260" r="160" stroke="rgba(29, 78, 216, 0.1)" strokeWidth="1" fill="none" />
-          <Circle cx="180" cy="260" r="100" stroke="rgba(29, 78, 216, 0.1)" strokeWidth="1" fill="none" />
-          <Circle cx="180" cy="260" r="40" stroke="rgba(29, 78, 216, 0.1)" strokeWidth="1" fill="none" />
+          <Circle cx="180" cy="260" r="160" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
+          <Circle cx="180" cy="260" r="100" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
+          <Circle cx="180" cy="260" r="40" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
 
           {/* Compass rose markings */}
-          <Line x1="180" y1="90" x2="180" y2="105" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" />
-          <Line x1="180" y1="415" x2="180" y2="430" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" />
-          <Line x1="10" y1="260" x2="25" y2="260" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" />
-          <Line x1="335" y1="260" x2="350" y2="260" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" />
+          <Line x1="180" y1="90" x2="180" y2="105" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
+          <Line x1="180" y1="415" x2="180" y2="430" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
+          <Line x1="10" y1="260" x2="25" y2="260" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
+          <Line x1="335" y1="260" x2="350" y2="260" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
         </Svg>
 
-        {/* Floating Interactive Peer Dots */}
-        {peers.map((peer) => {
-          const pos = peerPositions[peer.name];
-          if (!pos) return null;
+        {/* Layer 2: Rotated Sweep Radar Stick & Conic trail */}
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotate: rotateSpin }] }]} pointerEvents="none">
+          <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
+            <G transform="translate(180, 260)">
+              {/* Conic/Angular sweep trail wedges behind the stick */}
+              <Path d="M 0 0 L -25.0 -158.0 A 160 160 0 0 1 0 -160 Z" fill="#1D4ED8" fillOpacity={0.45} />
+              <Path d="M 0 0 L -49.4 -152.2 A 160 160 0 0 1 -25.0 -158.0 Z" fill="#1D4ED8" fillOpacity={0.40} />
+              <Path d="M 0 0 L -72.6 -142.6 A 160 160 0 0 1 -49.4 -152.2 Z" fill="#1D4ED8" fillOpacity={0.35} />
+              <Path d="M 0 0 L -94.0 -129.4 A 160 160 0 0 1 -72.6 -142.6 Z" fill="#1D4ED8" fillOpacity={0.30} />
+              <Path d="M 0 0 L -113.1 -113.1 A 160 160 0 0 1 -94.0 -129.4 Z" fill="#1D4ED8" fillOpacity={0.25} />
+              <Path d="M 0 0 L -129.4 -94.0 A 160 160 0 0 1 -113.1 -113.1 Z" fill="#1D4ED8" fillOpacity={0.20} />
+              <Path d="M 0 0 L -142.6 -72.6 A 160 160 0 0 1 -129.4 -94.0 Z" fill="#1D4ED8" fillOpacity={0.15} />
+              <Path d="M 0 0 L -152.2 -49.4 A 160 160 0 0 1 -142.6 -72.6 Z" fill="#1D4ED8" fillOpacity={0.10} />
+              <Path d="M 0 0 L -158.0 -25.0 A 160 160 0 0 1 -152.2 -49.4 Z" fill="#1D4ED8" fillOpacity={0.05} />
+              <Path d="M 0 0 L -160 0 A 160 160 0 0 1 -158.0 -25.0 Z" fill="#1D4ED8" fillOpacity={0.02} />
+              
+              {/* Leading edge neon stick */}
+              <Line x1="0" y1="0" x2="0" y2="-160" stroke="#ffffff" strokeWidth="2.5" />
+              <Line x1="0" y1="0" x2="0" y2="-160" stroke="#1D4ED8" strokeWidth="5" strokeOpacity="0.4" />
+            </G>
+          </Svg>
+        </Animated.View>
 
-          const isSelected = selectedPeer?.name === peer.name;
+        {/* Layer 3: Interactive Peer Dots & Name labels overlay */}
+        <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
+          {peers.map((peer) => {
+            const pos = peerPositions[peer.name];
+            if (!pos) return null;
 
-          return (
-            <TouchableOpacity
-              key={peer.name}
-              style={[
-                styles.nodeTouchable,
-                { left: pos.x - 20, top: pos.y - 20 }
-              ]}
-              onPress={() => handleSelectPeer(peer)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.dotContainer}>
-                {/* Glow ring */}
-                <Animated.View
-                  style={[
-                    styles.glowRing,
-                    {
-                      borderColor: pos.color,
-                      opacity: pulseAnim,
-                      transform: [
-                        {
-                          scale: pulseAnim.interpolate({
-                            inputRange: [0.4, 1],
-                            outputRange: [1, 1.8],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
+            const isSelected = selectedPeer?.name === peer.name;
+
+            return (
+              <G key={peer.name} onPress={() => handleSelectPeer(peer)}>
+                {/* Large transparent touch target */}
+                <Circle cx={pos.x} cy={pos.y} r="25" fill="transparent" />
+
+                {/* Pulsing outer glow ring */}
+                <AnimatedCircle
+                  cx={pos.x}
+                  cy={pos.y}
+                  r={pulseAnim.interpolate({
+                    inputRange: [0.4, 1],
+                    outputRange: [10, 20],
+                  })}
+                  stroke={pos.color}
+                  strokeWidth="1.5"
+                  fill="none"
+                  opacity={pulseAnim}
                 />
-                {/* Active selection outer ring */}
+
+                {/* Solid core indicator ring */}
                 {isSelected && (
-                  <View style={[styles.selectionRing, { borderColor: '#ffffff' }]} />
+                  <Circle cx={pos.x} cy={pos.y} r="14" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="3,3" fill="none" />
                 )}
+
                 {/* Center Core dot */}
-                <View style={[styles.coreDot, { backgroundColor: pos.color }]} />
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+                <Circle cx={pos.x} cy={pos.y} r="5" fill={pos.color} />
+
+                {/* User Name labels (Always visible) */}
+                <SvgText
+                  x={peer.name === 'Marcus Thorne' ? pos.x - 12 : pos.x + 12}
+                  y={pos.y + 3}
+                  fill={pos.color}
+                  fontSize="9"
+                  fontWeight="bold"
+                  textAnchor={peer.name === 'Marcus Thorne' ? 'end' : 'start'}
+                  fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}
+                >
+                  {peer.name}
+                </SvgText>
+              </G>
+            );
+          })}
+        </Svg>
       </View>
 
       {/* Selected Peer details card */}
