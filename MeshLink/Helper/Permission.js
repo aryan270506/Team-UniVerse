@@ -165,10 +165,12 @@ export function isNearbyPermissionResultGranted(result) {
     required.push(...ANDROID_BLUETOOTH_31);
   }
 
-  // NEARBY_WIFI_DEVICES is requested but not strictly required to pass this check,
-  // to avoid blocking startup if the device manufacturer has separate permissions 
-  // or dynamic toggles that return "never_ask_again" but the native library can 
-  // still function over Bluetooth or other mediums.
+  // NEARBY_WIFI_DEVICES is strictly required on Android 13+ (API 33+)
+  // for Google Play Services Nearby Connections to function over Wi-Fi.
+  if (apiLevel >= 33) {
+    required.push('android.permission.NEARBY_WIFI_DEVICES');
+  }
+
   return required.every((permission) => isGranted(result[permission]));
 }
 

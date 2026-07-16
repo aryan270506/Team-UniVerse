@@ -12,10 +12,10 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import Svg, { Rect, Circle, Line } from 'react-native-svg';
 
 export default function NetworkScreen({
+  peers = [],
   onStartChat
 }) {
   const [networkUptime, setNetworkUptime] = useState(18);
-
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -24,10 +24,43 @@ export default function NetworkScreen({
     return () => clearInterval(interval);
   }, []);
 
+  const activePeers = peers.filter(p => !p.status.toLowerCase().includes('offline'));
+  const peersReachableCount = peers.length > 0 ? activePeers.length : 2;
+  const avgHopDist = peers.length > 0 ? (activePeers.length > 0 ? '1.0' : '0.0') : '2.3';
+  const inTransitCount = peers.length > 0 ? 0 : 4;
+
+  const displayPeers = peers.length > 0 ? peers : [
+    { id: 'alex', name: 'Alex (Relay)', ip: '10.42.0.8', role: 'Active Relay Node', status: 'Offline', latency: '18ms', isMock: true },
+    { id: 'sam', name: 'Sam', ip: '10.42.0.3', role: 'Destination Peer', status: 'Offline', latency: '42ms', isMock: true }
+  ];
+
+  const getPeerCoords = (index, total) => {
+    if (total === 1) {
+      return { x: 260, y: 110 };
+    }
+    if (total === 2) {
+      return index === 0 ? { x: 250, y: 70 } : { x: 230, y: 160 };
+    }
+    const angle = (index * 2 * Math.PI) / total - Math.PI / 4;
+    const radius = 85;
+    return {
+      x: 170 + Math.cos(angle) * radius,
+      y: 110 + Math.sin(angle) * radius,
+    };
+  };
+
+  const positionedPeers = displayPeers.map((peer, index) => {
+    const coords = getPeerCoords(index, displayPeers.length);
+    return {
+      ...peer,
+      ...coords,
+      color: peer.avatarStatusColor || (peer.status.toLowerCase().includes('offline') ? '#6b7280' : '#818cf8'),
+    };
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       
-    
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <MaterialCommunityIcons name="sitemap" size={24} color="#a5b4fc" style={styles.logoIcon} />
@@ -38,22 +71,21 @@ export default function NetworkScreen({
         </TouchableOpacity>
       </View>
 
-      
       <View style={styles.metricsGrid}>
         <View style={styles.metricsRow}>
           <View style={styles.metricBox}>
-            <Text style={styles.metricValue}>12</Text>
+            <Text style={styles.metricValue}>{peersReachableCount}</Text>
             <Text style={styles.metricLabel}>PEERS REACHABLE</Text>
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricValue}>2.3</Text>
+            <Text style={styles.metricValue}>{avgHopDist}</Text>
             <Text style={styles.metricLabel}>AVG HOP DIST</Text>
           </View>
         </View>
 
         <View style={styles.metricsRow}>
           <View style={styles.metricBox}>
-            <Text style={styles.metricValue}>4</Text>
+            <Text style={styles.metricValue}>{inTransitCount}</Text>
             <Text style={styles.metricLabel}>IN TRANSIT</Text>
           </View>
           <View style={styles.metricBox}>
@@ -63,9 +95,7 @@ export default function NetworkScreen({
         </View>
       </View>
 
-     
       <View style={styles.topologyCard}>
-     
         <View style={styles.topologyCardHeader}>
           <View style={styles.meshActivePill}>
             <View style={styles.meshActiveDot} />
@@ -73,32 +103,52 @@ export default function NetworkScreen({
           </View>
         </View>
 
-    
         <View style={styles.svgContainer}>
           <Svg width="100%" height="220" viewBox="0 0 340 220">
-           
-            <Rect x="20" y="55" width="80" height="120" rx="40" ry="40" fill="none" stroke="rgba(165, 180, 252, 0.12)" strokeWidth="1.5" />
-            
-            {/* Center Loop */}
-            <Rect x="90" y="35" width="100" height="160" rx="50" ry="50" fill="none" stroke="rgba(165, 180, 252, 0.15)" strokeWidth="1.5" />
-            
-            {/* Right Loop */}
-            <Rect x="185" y="40" width="120" height="150" rx="60" ry="60" fill="none" stroke="rgba(165, 180, 252, 0.18)" strokeWidth="1.5" />
+            {/* Concentric radar reference circles */}
+            <Circle cx="170" cy="110" r="45" fill="none" stroke="rgba(165, 180, 252, 0.05)" strokeWidth="1" />
+            <Circle cx="170" cy="110" r="90" fill="none" stroke="rgba(165, 180, 252, 0.08)" strokeWidth="1" />
 
-           
-            <Circle cx="70" cy="85" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
-            <Circle cx="90" cy="160" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
-            <Circle cx="100" cy="85" r="4.5" fill="rgba(165, 180, 252, 0.4)" />
+            {/* Mesh connection lines between adjacent peers */}
+            {positionedPeers.map((peer, idx) => {
+              const nextPeer = positionedPeers[(idx + 1) % positionedPeers.length];
+              const isLinkActive = !peer.status.toLowerCase().includes('offline') && !nextPeer.status.toLowerCase().includes('offline');
 
-            
-            <Line x1="140" y1="120" x2="250" y2="70" stroke="#a5b4fc" strokeWidth="2" strokeDasharray="6, 4" />
-            
-      
-            <Line x1="250" y1="70" x2="230" y2="175" stroke="#a5b4fc" strokeWidth="2" strokeDasharray="6, 4" strokeOpacity={0.8} />
+              return (
+                <Line
+                  key={`link-${idx}`}
+                  x1={peer.x}
+                  y1={peer.y}
+                  x2={nextPeer.x}
+                  y2={nextPeer.y}
+                  stroke={isLinkActive ? '#a5b4fc' : 'rgba(165, 180, 252, 0.12)'}
+                  strokeWidth={isLinkActive ? 1.5 : 1}
+                  strokeDasharray={isLinkActive ? undefined : "4, 4"}
+                />
+              );
+            })}
+
+            {/* Radial connection lines from My Node to peers */}
+            {positionedPeers.map((peer, idx) => {
+              const isLinkActive = !peer.status.toLowerCase().includes('offline');
+              return (
+                <Line
+                  key={`radial-${idx}`}
+                  x1={170}
+                  y1={110}
+                  x2={peer.x}
+                  y2={peer.y}
+                  stroke={isLinkActive ? '#818cf8' : 'rgba(165, 180, 252, 0.1)'}
+                  strokeWidth={isLinkActive ? 2 : 1.2}
+                  strokeDasharray={isLinkActive ? undefined : "6, 4"}
+                />
+              );
+            })}
           </Svg>
 
+          {/* Center Operator Node (My Node) */}
           <TouchableOpacity 
-            style={[styles.nodeOperatorContainer, { left: 140 - 22, top: 120 - 22 }]}
+            style={[styles.nodeOperatorContainer, { left: 170 - 22, top: 110 - 22 }]}
             activeOpacity={0.85}
             onPress={() => Alert.alert("My Node", "Node IP: 10.42.0.1\nRole: Operator\nStatus: Active Router")}
           >
@@ -107,68 +157,74 @@ export default function NetworkScreen({
             </View>
           </TouchableOpacity>
 
-         
-          <TouchableOpacity 
-            style={[styles.nodeRelayContainer, { left: 250 - 30, top: 70 - 25 }]}
-            activeOpacity={0.85}
-            onPress={() => Alert.alert("Alex (Relay)", "Node IP: 10.42.0.8\nRole: Active Relay Node\nLatency: 18ms")}
-          >
-            <View style={styles.nodeRelayCore}>
-              <View style={styles.nodeInnerTarget} />
-            </View>
-            <Text style={styles.nodeLabel}>Alex (Relay)</Text>
-          </TouchableOpacity>
-
-       
-          <TouchableOpacity 
-            style={[styles.nodeRelayContainer, { left: 230 - 30, top: 175 - 25 }]}
-            activeOpacity={0.85}
-            onPress={() => {
-              Alert.alert(
-                "Sam", 
-                "Node IP: 10.42.0.3\nRole: Destination Peer\nLatency: 42ms",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Chat", onPress: () => onStartChat("Sam") }
-                ]
-              );
-            }}
-          >
-            <View style={styles.nodeRelayCore}>
-              <View style={styles.nodeInnerTarget} />
-            </View>
-            <Text style={styles.nodeLabel}>Sam</Text>
-          </TouchableOpacity>
+          {/* Dynamic / Discovered Peer Nodes */}
+          {positionedPeers.map((peer, idx) => {
+            return (
+              <TouchableOpacity 
+                key={`node-${idx}`}
+                style={[styles.nodeRelayContainer, { left: peer.x - 40, top: peer.y - 30 }]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (peer.isMock) {
+                    if (peer.id === 'sam') {
+                      Alert.alert(
+                        "Sam", 
+                        "Node IP: 10.42.0.3\nRole: Destination Peer\nStatus: Offline",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Chat", onPress: () => onStartChat("Sam") }
+                        ]
+                      );
+                    } else {
+                      Alert.alert(peer.name, `Node IP: ${peer.ip}\nRole: ${peer.role}\nStatus: ${peer.status}`);
+                    }
+                  } else {
+                    Alert.alert(
+                      peer.displayName || peer.name, 
+                      `Device ID: ${peer.deviceId || 'Unknown'}\nStatus: ${peer.status}\nConnection State: ${peer.connectionState}`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Chat", onPress: () => onStartChat(peer.displayName || peer.name) }
+                      ]
+                    );
+                  }
+                }}
+              >
+                <View style={[styles.nodeRelayCore, { borderColor: peer.color }]}>
+                  <View style={[styles.nodeInnerTarget, { backgroundColor: peer.color }]} />
+                </View>
+                <Text style={styles.nodeLabel}>{peer.displayName || peer.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
-
 
       <View style={styles.routingBanner}>
         <View style={styles.routingIconWrapper}>
           <MaterialCommunityIcons name="routes" size={24} color="#a5b4fc" />
         </View>
         <Text style={styles.routingText}>
-          Your last message reached <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>Sam</Text> through <Text style={{ fontWeight: 'bold', color: '#ffffff' }}>Alex</Text>
+          {activePeers.length > 0 
+            ? `Direct mesh link established to ${activePeers[0].displayName || activePeers[0].name}`
+            : "Waiting for nearby peers to connect to form a mesh route..."}
         </Text>
       </View>
 
-     
       <View style={styles.bottomGrid}>
-        
         <View style={styles.bottomGridBox}>
           <Text style={styles.bottomBoxTitle}>Signal Strength</Text>
           <View style={styles.signalBarsWrapper}>
-            <View style={[styles.signalBarItem, { height: 6, backgroundColor: '#818cf8' }]} />
-            <View style={[styles.signalBarItem, { height: 10, backgroundColor: '#818cf8' }]} />
-            <View style={[styles.signalBarItem, { height: 14, backgroundColor: '#818cf8' }]} />
+            <View style={[styles.signalBarItem, { height: 6, backgroundColor: activePeers.length > 0 ? '#818cf8' : '#1e293b' }]} />
+            <View style={[styles.signalBarItem, { height: 10, backgroundColor: activePeers.length > 0 ? '#818cf8' : '#1e293b' }]} />
+            <View style={[styles.signalBarItem, { height: 14, backgroundColor: activePeers.length > 0 ? '#818cf8' : '#1e293b' }]} />
             <View style={[styles.signalBarItem, { height: 18, backgroundColor: '#1e293b' }]} />
           </View>
         </View>
 
-       
         <View style={styles.bottomGridBox}>
           <Text style={styles.bottomBoxTitle}>Latency</Text>
-          <Text style={styles.latencyValue}>42ms</Text>
+          <Text style={styles.latencyValue}>{activePeers.length > 0 ? '15ms' : 'N/A'}</Text>
         </View>
       </View>
 
