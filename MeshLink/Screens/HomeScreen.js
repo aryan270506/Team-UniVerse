@@ -64,7 +64,8 @@ export default function HomeScreen({
   onToggleContactStatus,
   onDeleteChat,
   onPressRadar,
-  onPressConnect
+  onPressConnect,
+  isSosBroadcastActive = false
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeer, setSelectedPeer] = useState(null);
@@ -268,11 +269,11 @@ export default function HomeScreen({
 
               {/* Faint Concentric Radar Rings */}
               {/* Concentric Radar Rings */}
-              <Circle cx="110" cy="110" r="22" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
-              <Circle cx="110" cy="110" r="44" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
-              <Circle cx="110" cy="110" r="66" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
-              <Circle cx="110" cy="110" r="88" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
-              <Circle cx="110" cy="110" r="110" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="22" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(29, 78, 216, 0.3)"} strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="44" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(29, 78, 216, 0.3)"} strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="66" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(29, 78, 216, 0.3)"} strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="88" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(29, 78, 216, 0.3)"} strokeWidth="1.5" fill="none" />
+              <Circle cx="110" cy="110" r="110" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(29, 78, 216, 0.3)"} strokeWidth="1.5" fill="none" />
 
               {/* Dynamic Discovered Peers Dots */}
               {peers.map((peer, idx) => {
@@ -286,7 +287,7 @@ export default function HomeScreen({
                 const distance = 35 + (Math.abs(hash) % 65); // Keeps inside 110px radius
                 const cx = 110 + Math.cos(angle) * distance;
                 const cy = 110 + Math.sin(angle) * distance;
-                const color = peer.avatarStatusColor || '#10b981';
+                const color = isSosBroadcastActive ? '#ef4444' : (peer.avatarStatusColor || '#10b981');
                 const isOffline = peer.status && peer.status.toLowerCase().includes('offline');
                 const opacityVal = isOffline ? 0.35 : 0.85;
 
@@ -314,19 +315,19 @@ export default function HomeScreen({
             <Animated.View style={[styles.radarSweepWrapper, { transform: [{ rotate: rotateSpin }] }]}>
               <Svg width="220" height="220" viewBox="0 0 220 220">
                 {/* Conic/Angular sweep trail using adjacent 9-degree wedges */}
-                <Path d="M 110 110 L 92.8 1.4 A 110 110 0 0 1 110 0 Z" fill="#1D4ED8" fillOpacity={0.45} />
-                <Path d="M 110 110 L 76.0 5.4 A 110 110 0 0 1 92.8 1.4 Z" fill="#1D4ED8" fillOpacity={0.40} />
-                <Path d="M 110 110 L 60.1 12.0 A 110 110 0 0 1 76.0 5.4 Z" fill="#1D4ED8" fillOpacity={0.35} />
-                <Path d="M 110 110 L 45.3 21.0 A 110 110 0 0 1 60.1 12.0 Z" fill="#1D4ED8" fillOpacity={0.30} />
-                <Path d="M 110 110 L 32.2 32.2 A 110 110 0 0 1 45.3 21.0 Z" fill="#1D4ED8" fillOpacity={0.25} />
-                <Path d="M 110 110 L 21.0 45.3 A 110 110 0 0 1 32.2 32.2 Z" fill="#1D4ED8" fillOpacity={0.20} />
-                <Path d="M 110 110 L 12.0 60.1 A 110 110 0 0 1 21.0 45.3 Z" fill="#1D4ED8" fillOpacity={0.15} />
-                <Path d="M 110 110 L 5.4 76.0 A 110 110 0 0 1 12.0 60.1 Z" fill="#1D4ED8" fillOpacity={0.10} />
-                <Path d="M 110 110 L 1.4 92.8 A 110 110 0 0 1 5.4 76.0 Z" fill="#1D4ED8" fillOpacity={0.05} />
-                <Path d="M 110 110 L 0 110 A 110 110 0 0 1 1.4 92.8 Z" fill="#1D4ED8" fillOpacity={0.02} />
+                <Path d="M 110 110 L 92.8 1.4 A 110 110 0 0 1 110 0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.45} />
+                <Path d="M 110 110 L 76.0 5.4 A 110 110 0 0 1 92.8 1.4 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.40} />
+                <Path d="M 110 110 L 60.1 12.0 A 110 110 0 0 1 76.0 5.4 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.35} />
+                <Path d="M 110 110 L 45.3 21.0 A 110 110 0 0 1 60.1 12.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.30} />
+                <Path d="M 110 110 L 32.2 32.2 A 110 110 0 0 1 45.3 21.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.25} />
+                <Path d="M 110 110 L 21.0 45.3 A 110 110 0 0 1 32.2 32.2 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.20} />
+                <Path d="M 110 110 L 12.0 60.1 A 110 110 0 0 1 21.0 45.3 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.15} />
+                <Path d="M 110 110 L 5.4 76.0 A 110 110 0 0 1 12.0 60.1 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.10} />
+                <Path d="M 110 110 L 1.4 92.8 A 110 110 0 0 1 5.4 76.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.05} />
+                <Path d="M 110 110 L 0 110 A 110 110 0 0 1 1.4 92.8 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.02} />
 
                 {/* Bright sweep leading edge line (Stick) */}
-                <Line x1="110" y1="110" x2="110" y2="0" stroke="#3b82f6" strokeWidth="2.5" />
+                <Line x1="110" y1="110" x2="110" y2="0" stroke={isSosBroadcastActive ? "#ef4444" : "#3b82f6"} strokeWidth="2.5" />
                 {/* Extra bright core highlight line */}
                 <Line x1="110" y1="110" x2="110" y2="0" stroke="#ffffff" strokeWidth="0.75" strokeOpacity="0.8" />
               </Svg>
@@ -334,13 +335,13 @@ export default function HomeScreen({
 
             {/* Center Core Dot */}
             <View style={styles.radarCenterCore}>
-              <View style={styles.radarCoreHighlight} />
-              <View style={styles.radarCorePulse} />
+              <View style={[styles.radarCoreHighlight, isSosBroadcastActive && { backgroundColor: '#fca5a5' }]} />
+              <View style={[styles.radarCorePulse, isSosBroadcastActive && { backgroundColor: '#ef4444' }]} />
             </View>
           </TouchableOpacity>
 
-          <Animated.Text style={[styles.scanningText, { opacity: pulseAnim }]}>
-            Looking for nearby devices...
+          <Animated.Text style={[styles.scanningText, { opacity: pulseAnim }, isSosBroadcastActive && { color: '#ef4444', fontWeight: 'bold' }]}>
+            {isSosBroadcastActive ? "⚠️ EMERGENCY SOS ACTIVE - RADAR RED ALERT ⚠️" : "Looking for nearby devices..."}
           </Animated.Text>
         </View>
       </ScrollView>

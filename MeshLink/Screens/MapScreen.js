@@ -16,7 +16,8 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 export default function MapScreen({
   navigation,
   peers = [],
-  onBack
+  onBack,
+  isSosBroadcastActive = false
 }) {
   const [selectedPeer, setSelectedPeer] = useState(null);
 
@@ -69,7 +70,7 @@ export default function MapScreen({
     const x = 180 + Math.cos(angle) * distance;
     const y = 260 + Math.sin(angle) * distance;
     const level = peer.level || (distance < 80 ? 'STRONG' : distance < 120 ? 'FAIR' : 'POOR');
-    const color = peer.avatarStatusColor || (peer.connected ? '#10b981' : '#fbbf24');
+    const color = isSosBroadcastActive ? '#ef4444' : (peer.avatarStatusColor || (peer.connected ? '#10b981' : '#fbbf24'));
     return { x, y, color, level };
   };
 
@@ -93,50 +94,57 @@ export default function MapScreen({
         <View style={styles.headerRightPlaceholder} />
       </View>
 
+      {isSosBroadcastActive && (
+        <View style={styles.sosAlertBanner}>
+          <Feather name="alert-triangle" size={16} color="#ffffff" style={{ marginRight: 8 }} />
+          <Text style={styles.sosAlertBannerText}>⚠️ EMERGENCY SOS ACTIVE - RADAR RED ALERT ⚠️</Text>
+        </View>
+      )}
+
       <View style={styles.mapContainer}>
         {/* Layer 1: Background grid, terrain curves, and concentric radar rings */}
         <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
           {/* Tactical Background Coordinate Grid */}
           {/* Horizontal lines */}
-          <Line x1="0" y1="50" x2="360" y2="50" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="100" x2="360" y2="100" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="150" x2="360" y2="150" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="200" x2="360" y2="200" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="250" x2="360" y2="250" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="300" x2="360" y2="300" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="350" x2="360" y2="350" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="400" x2="360" y2="400" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="0" y1="450" x2="360" y2="450" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
+          <Line x1="0" y1="50" x2="360" y2="50" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="100" x2="360" y2="100" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="150" x2="360" y2="150" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="200" x2="360" y2="200" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="250" x2="360" y2="250" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="300" x2="360" y2="300" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="350" x2="360" y2="350" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="400" x2="360" y2="400" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="0" y1="450" x2="360" y2="450" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
           
           {/* Vertical lines */}
-          <Line x1="40" y1="0" x2="40" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="80" y1="0" x2="80" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="120" y1="0" x2="120" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="160" y1="0" x2="160" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="200" y1="0" x2="200" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="240" y1="0" x2="240" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="280" y1="0" x2="280" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
-          <Line x1="320" y1="0" x2="320" y2="520" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="0.75" />
+          <Line x1="40" y1="0" x2="40" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="80" y1="0" x2="80" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="120" y1="0" x2="120" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="160" y1="0" x2="160" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="200" y1="0" x2="200" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="240" y1="0" x2="240" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="280" y1="0" x2="280" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
+          <Line x1="320" y1="0" x2="320" y2="520" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(59, 130, 246, 0.18)"} strokeWidth="0.75" />
 
           {/* Topographic Terrain contour lines (Curves) */}
-          <Path d="M -20 180 Q 80 120 120 220 T 380 160" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
-          <Path d="M -20 280 Q 90 220 150 320 T 380 260" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
-          <Path d="M -20 380 Q 100 320 180 420 T 380 360" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
+          <Path d="M -20 180 Q 80 120 120 220 T 380 160" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
+          <Path d="M -20 280 Q 90 220 150 320 T 380 260" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
+          <Path d="M -20 380 Q 100 320 180 420 T 380 360" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
           
-          <Path d="M 60 -20 Q 140 100 80 200 T 120 540" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
-          <Path d="M 180 -20 Q 240 140 190 280 T 220 540" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
-          <Path d="M 300 -20 Q 320 200 290 340 T 310 540" fill="none" stroke="rgba(59, 130, 246, 0.12)" strokeWidth="1.2" />
+          <Path d="M 60 -20 Q 140 100 80 200 T 120 540" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
+          <Path d="M 180 -20 Q 240 140 190 280 T 220 540" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
+          <Path d="M 300 -20 Q 320 200 290 340 T 310 540" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.12)"} strokeWidth="1.2" />
 
           {/* Core Radar reference lines */}
-          <Circle cx="180" cy="260" r="160" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
-          <Circle cx="180" cy="260" r="100" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
-          <Circle cx="180" cy="260" r="40" stroke="rgba(29, 78, 216, 0.12)" strokeWidth="1.5" fill="none" />
+          <Circle cx="180" cy="260" r="160" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.3)" : "rgba(29, 78, 216, 0.12)"} strokeWidth="1.5" fill="none" />
+          <Circle cx="180" cy="260" r="100" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.3)" : "rgba(29, 78, 216, 0.12)"} strokeWidth="1.5" fill="none" />
+          <Circle cx="180" cy="260" r="40" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.3)" : "rgba(29, 78, 216, 0.12)"} strokeWidth="1.5" fill="none" />
 
           {/* Compass rose markings */}
-          <Line x1="180" y1="90" x2="180" y2="105" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
-          <Line x1="180" y1="415" x2="180" y2="430" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
-          <Line x1="10" y1="260" x2="25" y2="260" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
-          <Line x1="335" y1="260" x2="350" y2="260" stroke="rgba(59, 130, 246, 0.4)" strokeWidth="1.5" />
+          <Line x1="180" y1="90" x2="180" y2="105" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)"} strokeWidth="1.5" />
+          <Line x1="180" y1="415" x2="180" y2="430" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)"} strokeWidth="1.5" />
+          <Line x1="10" y1="260" x2="25" y2="260" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)"} strokeWidth="1.5" />
+          <Line x1="335" y1="260" x2="350" y2="260" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)"} strokeWidth="1.5" />
         </Svg>
 
         {/* Layer 2: Rotated Sweep Radar Stick & Conic trail */}
@@ -144,20 +152,20 @@ export default function MapScreen({
           <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
             <G transform="translate(180, 260)">
               {/* Conic/Angular sweep trail wedges behind the stick */}
-              <Path d="M 0 0 L -25.0 -158.0 A 160 160 0 0 1 0 -160 Z" fill="#1D4ED8" fillOpacity={0.45} />
-              <Path d="M 0 0 L -49.4 -152.2 A 160 160 0 0 1 -25.0 -158.0 Z" fill="#1D4ED8" fillOpacity={0.40} />
-              <Path d="M 0 0 L -72.6 -142.6 A 160 160 0 0 1 -49.4 -152.2 Z" fill="#1D4ED8" fillOpacity={0.35} />
-              <Path d="M 0 0 L -94.0 -129.4 A 160 160 0 0 1 -72.6 -142.6 Z" fill="#1D4ED8" fillOpacity={0.30} />
-              <Path d="M 0 0 L -113.1 -113.1 A 160 160 0 0 1 -94.0 -129.4 Z" fill="#1D4ED8" fillOpacity={0.25} />
-              <Path d="M 0 0 L -129.4 -94.0 A 160 160 0 0 1 -113.1 -113.1 Z" fill="#1D4ED8" fillOpacity={0.20} />
-              <Path d="M 0 0 L -142.6 -72.6 A 160 160 0 0 1 -129.4 -94.0 Z" fill="#1D4ED8" fillOpacity={0.15} />
-              <Path d="M 0 0 L -152.2 -49.4 A 160 160 0 0 1 -142.6 -72.6 Z" fill="#1D4ED8" fillOpacity={0.10} />
-              <Path d="M 0 0 L -158.0 -25.0 A 160 160 0 0 1 -152.2 -49.4 Z" fill="#1D4ED8" fillOpacity={0.05} />
-              <Path d="M 0 0 L -160 0 A 160 160 0 0 1 -158.0 -25.0 Z" fill="#1D4ED8" fillOpacity={0.02} />
+              <Path d="M 0 0 L -25.0 -158.0 A 160 160 0 0 1 0 -160 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.45} />
+              <Path d="M 0 0 L -49.4 -152.2 A 160 160 0 0 1 -25.0 -158.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.40} />
+              <Path d="M 0 0 L -72.6 -142.6 A 160 160 0 0 1 -49.4 -152.2 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.35} />
+              <Path d="M 0 0 L -94.0 -129.4 A 160 160 0 0 1 -72.6 -142.6 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.30} />
+              <Path d="M 0 0 L -113.1 -113.1 A 160 160 0 0 1 -94.0 -129.4 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.25} />
+              <Path d="M 0 0 L -129.4 -94.0 A 160 160 0 0 1 -113.1 -113.1 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.20} />
+              <Path d="M 0 0 L -142.6 -72.6 A 160 160 0 0 1 -129.4 -94.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.15} />
+              <Path d="M 0 0 L -152.2 -49.4 A 160 160 0 0 1 -142.6 -72.6 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.10} />
+              <Path d="M 0 0 L -158.0 -25.0 A 160 160 0 0 1 -152.2 -49.4 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.05} />
+              <Path d="M 0 0 L -160 0 A 160 160 0 0 1 -158.0 -25.0 Z" fill={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} fillOpacity={0.02} />
               
               {/* Leading edge neon stick */}
               <Line x1="0" y1="0" x2="0" y2="-160" stroke="#ffffff" strokeWidth="2.5" />
-              <Line x1="0" y1="0" x2="0" y2="-160" stroke="#1D4ED8" strokeWidth="5" strokeOpacity="0.4" />
+              <Line x1="0" y1="0" x2="0" y2="-160" stroke={isSosBroadcastActive ? "#ef4444" : "#1D4ED8"} strokeWidth="5" strokeOpacity="0.4" />
             </G>
           </Svg>
         </Animated.View>
@@ -457,5 +465,22 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  sosAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fca5a5',
+  },
+  sosAlertBannerText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
 });

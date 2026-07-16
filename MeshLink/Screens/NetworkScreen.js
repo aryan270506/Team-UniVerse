@@ -13,7 +13,8 @@ import Svg, { Rect, Circle, Line } from 'react-native-svg';
 
 export default function NetworkScreen({
   peers = [],
-  onStartChat
+  onStartChat,
+  isSosBroadcastActive = false
 }) {
   const [networkUptime, setNetworkUptime] = useState(18);
 
@@ -54,7 +55,7 @@ export default function NetworkScreen({
     return {
       ...peer,
       ...coords,
-      color: peer.avatarStatusColor || (peer.status.toLowerCase().includes('offline') ? '#6b7280' : '#818cf8'),
+      color: isSosBroadcastActive ? '#ef4444' : (peer.avatarStatusColor || (peer.status.toLowerCase().includes('offline') ? '#6b7280' : '#818cf8')),
     };
   });
 
@@ -97,17 +98,17 @@ export default function NetworkScreen({
 
       <View style={styles.topologyCard}>
         <View style={styles.topologyCardHeader}>
-          <View style={styles.meshActivePill}>
-            <View style={styles.meshActiveDot} />
-            <Text style={styles.meshActiveText}>Mesh Active</Text>
+          <View style={[styles.meshActivePill, isSosBroadcastActive && { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.25)' }]}>
+            <View style={[styles.meshActiveDot, isSosBroadcastActive && { backgroundColor: '#ef4444' }]} />
+            <Text style={[styles.meshActiveText, isSosBroadcastActive && { color: '#ef4444' }]}>{isSosBroadcastActive ? '⚠️ RED ALERT ACTIVE' : 'Mesh Active'}</Text>
           </View>
         </View>
 
         <View style={styles.svgContainer}>
           <Svg width="100%" height="220" viewBox="0 0 340 220">
             {/* Concentric radar reference circles */}
-            <Circle cx="170" cy="110" r="45" fill="none" stroke="rgba(165, 180, 252, 0.05)" strokeWidth="1" />
-            <Circle cx="170" cy="110" r="90" fill="none" stroke="rgba(165, 180, 252, 0.08)" strokeWidth="1" />
+            <Circle cx="170" cy="110" r="45" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.15)" : "rgba(165, 180, 252, 0.05)"} strokeWidth="1" />
+            <Circle cx="170" cy="110" r="90" fill="none" stroke={isSosBroadcastActive ? "rgba(239, 68, 68, 0.2)" : "rgba(165, 180, 252, 0.08)"} strokeWidth="1" />
 
             {/* Mesh connection lines between adjacent peers */}
             {positionedPeers.map((peer, idx) => {
@@ -121,9 +122,9 @@ export default function NetworkScreen({
                   y1={peer.y}
                   x2={nextPeer.x}
                   y2={nextPeer.y}
-                  stroke={isLinkActive ? '#a5b4fc' : 'rgba(165, 180, 252, 0.12)'}
-                  strokeWidth={isLinkActive ? 1.5 : 1}
-                  strokeDasharray={isLinkActive ? undefined : "4, 4"}
+                  stroke={isSosBroadcastActive ? '#fca5a5' : (isLinkActive ? '#a5b4fc' : 'rgba(165, 180, 252, 0.12)')}
+                  strokeWidth={isLinkActive || isSosBroadcastActive ? 1.5 : 1}
+                  strokeDasharray={isLinkActive || isSosBroadcastActive ? undefined : "4, 4"}
                 />
               );
             })}
@@ -138,9 +139,9 @@ export default function NetworkScreen({
                   y1={110}
                   x2={peer.x}
                   y2={peer.y}
-                  stroke={isLinkActive ? '#818cf8' : 'rgba(165, 180, 252, 0.1)'}
-                  strokeWidth={isLinkActive ? 2 : 1.2}
-                  strokeDasharray={isLinkActive ? undefined : "6, 4"}
+                  stroke={isSosBroadcastActive ? '#ef4444' : (isLinkActive ? '#818cf8' : 'rgba(165, 180, 252, 0.1)')}
+                  strokeWidth={isLinkActive || isSosBroadcastActive ? 2 : 1.2}
+                  strokeDasharray={isLinkActive || isSosBroadcastActive ? undefined : "6, 4"}
                 />
               );
             })}
@@ -152,7 +153,7 @@ export default function NetworkScreen({
             activeOpacity={0.85}
             onPress={() => Alert.alert("My Node", "Node IP: 10.42.0.1\nRole: Operator\nStatus: Active Router")}
           >
-            <View style={styles.nodeOperatorCore}>
+            <View style={[styles.nodeOperatorCore, isSosBroadcastActive && { backgroundColor: '#ef4444', borderColor: '#fca5a5' }]}>
               <Feather name="user" size={16} color="#ffffff" />
             </View>
           </TouchableOpacity>

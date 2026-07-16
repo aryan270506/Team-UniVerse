@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,6 +9,7 @@ import {
   Linking,
   Alert,
   ActivityIndicator,
+  Animated,
   StatusBar as RNStatusBar
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -93,7 +94,8 @@ function MainTabsScreen({
   handleToggleContactStatus,
   handleDeleteChat,
   setShowConfirmModal,
-  onStartChat
+  onStartChat,
+  isSosBroadcastActive
 }) {
   return (
     <View style={styles.contentWrapper}>
@@ -107,6 +109,7 @@ function MainTabsScreen({
           onDeleteChat={handleDeleteChat}
           onPressRadar={() => navigation.navigate('Map')}
           onPressConnect={() => navigation.navigate('Scanner')}
+          isSosBroadcastActive={isSosBroadcastActive}
         />
       )}
 
@@ -114,6 +117,7 @@ function MainTabsScreen({
         <NetworkScreen
           peers={peers}
           onStartChat={onStartChat}
+          isSosBroadcastActive={isSosBroadcastActive}
         />
       )}
 
@@ -193,6 +197,72 @@ export default function App() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
   const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
+  const [isSosBroadcastActive, setIsSosBroadcastActive] = useState(false);
+
+  const isAnySosActive = isSosBroadcastActive || peers.some((p) => p.isSosAlertActive);
+
+  const startSosBroadcast = () => {
+    setIsSosBroadcastActive(true);
+    peers.forEach((peer) => {
+      if (peer.connected && peer.endpointId) {
+        const envelope = createMessageEnvelope({
+          senderId: myDeviceId || 'LOCAL',
+          senderName: myDisplayName || 'Me',
+          recipientId: peer.deviceId || peer.endpointId,
+          type: 'sos',
+          payload: { active: true },
+          ttl: 5,
+        });
+        sendMessage(peer.endpointId, envelope);
+      }
+    });
+  };
+
+  const stopSosBroadcast = () => {
+    setIsSosBroadcastActive(false);
+    peers.forEach((peer) => {
+      if (peer.connected && peer.endpointId) {
+        const envelope = createMessageEnvelope({
+          senderId: myDeviceId || 'LOCAL',
+          senderName: myDisplayName || 'Me',
+          recipientId: peer.deviceId || peer.endpointId,
+          type: 'sos',
+          payload: { active: false },
+          ttl: 5,
+        });
+        sendMessage(peer.endpointId, envelope);
+      }
+    });
+  };
+
+  const sosBlinkAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let anim;
+    const isOtherSosActive = peers.some(p => p.isSosAlertActive);
+    if (isOtherSosActive) {
+      anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(sosBlinkAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(sosBlinkAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          })
+        ])
+      );
+      anim.start();
+    } else {
+      sosBlinkAnim.setValue(0);
+    }
+    return () => {
+      if (anim) anim.stop();
+    };
+  }, [peers, sosBlinkAnim]);
 
   // Bootstrap initial signup verification and database setup
   useEffect(() => {
@@ -353,25 +423,39 @@ export default function App() {
 
         // 1. Peer Discovered
         subDiscovered = onPeerDiscovered((event) => {
-          const { endpointId, displayName: discoveredName } = event || {};
+          let { endpointId, displayName: discoveredName } = event || {};
           if (!endpointId) return;
 
+          let isPeerSos = false;
+          if (discoveredName && discoveredName.endsWith('__SOS__')) {
+            isPeerSos = true;
+            discoveredName = discoveredName.replace('__SOS__', '');
+          }
+
           ensurePeer(endpointId, discoveredName, {
-            status: 'Nearby • Tap to connect',
+            status: isPeerSos ? '⚠️ SOS ALERT ACTIVE' : 'Nearby • Tap to connect',
             connectionState: 'discovered',
-            avatarStatusColor: '#fbbf24',
+            avatarStatusColor: isPeerSos ? '#ef4444' : '#fbbf24',
+            isSosAlertActive: isPeerSos,
           });
         });
 
         // 2. Incoming Connection Request
         subRequest = onConnectionRequest((event) => {
-          const { endpointId, displayName: requestName } = event || {};
+          let { endpointId, displayName: requestName } = event || {};
           if (!endpointId) return;
 
+          let isPeerSos = false;
+          if (requestName && requestName.endsWith('__SOS__')) {
+            isPeerSos = true;
+            requestName = requestName.replace('__SOS__', '');
+          }
+
           ensurePeer(endpointId, requestName, {
-            status: 'Connection request',
+            status: isPeerSos ? '⚠️ SOS ALERT ACTIVE' : 'Connection request',
             connectionState: 'requesting',
-            avatarStatusColor: '#f59e0b',
+            avatarStatusColor: isPeerSos ? '#ef4444' : '#f59e0b',
+            isSosAlertActive: isPeerSos,
           });
 
           Alert.alert(
@@ -393,15 +477,22 @@ export default function App() {
 
         // 3. Connection Established Successfully
         subConnected = onPeerConnected((event) => {
-          const { endpointId, displayName: connectedName } = event || {};
+          let { endpointId, displayName: connectedName } = event || {};
           if (!endpointId) return;
 
+          let isPeerSos = false;
+          if (connectedName && connectedName.endsWith('__SOS__')) {
+            isPeerSos = true;
+            connectedName = connectedName.replace('__SOS__', '');
+          }
+
           ensurePeer(endpointId, connectedName, {
-            status: 'Connected • Just now',
+            status: isPeerSos ? '⚠️ SOS ALERT ACTIVE' : 'Connected • Just now',
             connectionState: 'connected',
             connected: true,
-            avatarStatusColor: '#10b981',
+            avatarStatusColor: isPeerSos ? '#ef4444' : '#10b981',
             added: true,
+            isSosAlertActive: isPeerSos,
           });
 
           // Send handshake envelope to exchange permanent device IDs
@@ -445,6 +536,36 @@ export default function App() {
           if (!endpointId || !payload) return;
 
           const parsed = parseEnvelope(payload);
+
+          if (parsed?.type === 'sos') {
+            let active = false;
+            if (parsed.payload) {
+              try {
+                const parsedPayload = typeof parsed.payload === 'string' ? JSON.parse(parsed.payload) : parsed.payload;
+                active = !!parsedPayload.active;
+              } catch (e) {
+                active = !!parsed.active;
+              }
+            } else {
+              active = !!parsed.active;
+            }
+
+            setPeers((currentPeers) => {
+              return currentPeers.map((p) => {
+                if (p.endpointId === endpointId || p.deviceId === parsed.senderId || p.id === endpointId) {
+                  return {
+                    ...p,
+                    isSosAlertActive: active,
+                    avatarStatusColor: active ? '#ef4444' : '#10b981',
+                    status: active ? '⚠️ SOS ALERT ACTIVE' : 'Connected • Active',
+                  };
+                }
+                return p;
+              });
+            });
+            return;
+          }
+
           const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
           setPeers((currentPeers) => {
@@ -543,7 +664,8 @@ export default function App() {
         });
 
         // Start scanning/advertising only after listeners are attached.
-        startTransport(name);
+        const advertisingName = isSosBroadcastActive ? `${name}__SOS__` : name;
+        startTransport(advertisingName);
 
       } catch (e) {
         console.error('[MeshLink P2P] Failed to initialize P2P mesh network:', e);
@@ -567,7 +689,7 @@ export default function App() {
         console.warn('Failed to clean up mesh node listeners:', e);
       }
     };
-  }, [isUserSignedUp]);
+  }, [isUserSignedUp, isSosBroadcastActive]);
 
   const handleAddPeer = (newPeer) => {
     setPeers((prev) => [...prev, normalizePeer(newPeer)]);
@@ -747,6 +869,7 @@ export default function App() {
                   handleDeleteChat={handleDeleteChat}
                   setShowConfirmModal={setShowConfirmModal}
                   onStartChat={handleOpenPeerChat}
+                  isSosBroadcastActive={isAnySosActive}
                 />
               )}
             </Stack.Screen>
@@ -780,7 +903,10 @@ export default function App() {
                 <SOSScreen
                   {...props}
                   peers={peers}
-                  onStopBroadcasting={() => props.navigation.goBack()}
+                  onStopBroadcasting={() => {
+                    stopSosBroadcast();
+                    props.navigation.goBack();
+                  }}
                   onSelectPeerOptions={(peer) => {
                     setSelectedPeerOptions(peer);
                     setShowSOSOptionsModal(true);
@@ -793,6 +919,7 @@ export default function App() {
                 <MapScreen
                   {...props}
                   peers={peers}
+                  isSosBroadcastActive={isAnySosActive}
                   onBack={() => props.navigation.goBack()}
                 />
               )}
@@ -840,6 +967,7 @@ export default function App() {
                   activeOpacity={0.8}
                   onPress={() => {
                     setShowConfirmModal(false);
+                    startSosBroadcast();
                     if (navigationRef.isReady()) {
                       navigationRef.navigate('SOS');
                     }
@@ -909,6 +1037,20 @@ export default function App() {
             </BlurView>
           </View>
         </Modal>
+        {/* Blinking Red Alert Overlay when another device is broadcasting SOS */}
+        {peers.some(p => p.isSosAlertActive) && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                opacity: sosBlinkAnim,
+                zIndex: 9999,
+              }
+            ]}
+          />
+        )}
       </SafeAreaView>
     </SafeAreaProvider>
   );
