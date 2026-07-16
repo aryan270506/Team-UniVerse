@@ -17,7 +17,10 @@ export default function SOSScreen({
   onSelectPeerOptions,
   peers = [],
 }) {
-  const [discoveredSOSPeers, setDiscoveredSOSPeers] = useState([]);
+  const discoveredSOSPeers = peers.map(p => ({
+    name: p.name || p.displayName,
+    ip: p.endpointId || 'P2P Link'
+  }));
 
   // Animation hooks
   const pulseRing1 = useRef(new Animated.Value(0)).current;
@@ -55,26 +58,10 @@ export default function SOSScreen({
 
     Animated.parallel([anim1, anim2, anim3]).start();
 
-    // Timers for simulated node discovery
-    const timer1 = setTimeout(() => {
-      setDiscoveredSOSPeers(prev => [...prev, { name: 'Sarah Chen', ip: '10.42.0.14' }]);
-    }, 2000);
-
-    const timer2 = setTimeout(() => {
-      setDiscoveredSOSPeers(prev => [...prev, { name: 'Marcus Thorne', ip: '10.42.0.8' }]);
-    }, 4500);
-
-    const timer3 = setTimeout(() => {
-      setDiscoveredSOSPeers(prev => [...prev, { name: 'Elias Thorne', ip: '10.42.0.3' }]);
-    }, 7000);
-
     return () => {
       anim1.stop();
       anim2.stop();
       anim3.stop();
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
     };
   }, [pulseRing1, pulseRing2, pulseRing3]);
 

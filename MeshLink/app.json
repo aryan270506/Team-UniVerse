@@ -2,6 +2,7 @@
   "expo": {
     "name": "MeshLink",
     "slug": "MeshLink",
+    "scheme": "meshlink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -26,6 +27,7 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_ADVERTISE",
         "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.NEARBY_WIFI_DEVICES",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.CHANGE_WIFI_STATE",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -38,13 +40,13 @@
     "plugins": [
       "expo-font",
       "expo-sqlite",
-      "expo-secure-store",
-      "./plugins/withNearby"
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {
-        "projectId": "a1972ab8-998f-4695-8dd0-23cd30f343fc"
+        "projectId": "8a4bbee8-aaff-4f72-845b-851afc89feeb"
       }
-    }
+    },
+    "owner": "aryanbhoge"
   }
 }

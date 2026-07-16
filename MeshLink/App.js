@@ -6,6 +6,7 @@ import {
   Text,
   Modal,
   Platform,
+  Linking,
   Alert,
   ActivityIndicator,
   StatusBar as RNStatusBar
@@ -15,18 +16,37 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { isSignedUp, getDisplayName } from './Helper/UserIdentity';
-
+import { isSignedUp, getDisplayName, getOrCreateDeviceId } from './Helper/UserIdentity';
+import { requestNearbyPermissions, isNearbyPermissionResultGranted, checkLocationServicesEnabled } from './Helper/Permission';
+import { initDb, getAllPeers, saveMessage, upsertPeer, setPeerConnected, getMessagesWithPeer } from './storage/db';
+import { normalizePeer } from './services/mesh/peerRegistry';
+import { createHandshakeEnvelope, createMessageEnvelope, parseEnvelope } from './services/mesh/messageEnvelope';
+import {
+  startTransport,
+  stopTransport,
+  requestConnection,
+  acceptConnection,
+  rejectConnection,
+  disconnectConnection,
+  sendMessage,
+  onPeerDiscovered,
+  onConnectionRequest,
+  onPeerConnected,
+  onPeerDisconnected,
+  onConnectionRejected,
+  onPayloadReceived,
+  onTransportStatus,
+  onTransportError,
+} from './services/mesh/meshTransport';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 // Dynamic wrappers to resolve screen components on demand without static top-level imports
-
 const LoginScreen = (props) => {
   const Screen = require('./Screens/login/login').default;
   return <Screen {...props} />;
-}
+};
 const AccountScreen = (props) => {
   const Screen = require('./Screens/login/account').default;
   return <Screen {...props} />;
@@ -72,14 +92,15 @@ function MainTabsScreen({
   handleAddPeer,
   handleToggleContactStatus,
   handleDeleteChat,
-  setShowConfirmModal
+  setShowConfirmModal,
+  onStartChat
 }) {
   return (
     <View style={styles.contentWrapper}>
       {activeTab === 'Peers' && (
         <HomeScreen
           peers={peers}
-          onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
+          onStartChat={onStartChat}
           onTriggerSOS={() => setShowConfirmModal(true)}
           onAddPeer={handleAddPeer}
           onToggleContactStatus={handleToggleContactStatus}
@@ -91,7 +112,7 @@ function MainTabsScreen({
 
       {activeTab === 'Network' && (
         <NetworkScreen
-          onStartChat={(peerName) => navigation.navigate('Chat', { peerName })}
+          onStartChat={onStartChat}
         />
       )}
 
@@ -164,103 +185,367 @@ export default function App() {
   const [isUserSignedUp, setIsUserSignedUp] = useState(false);
   const [activeTab, setActiveTab] = useState('Peers');
 
+  const [myDisplayName, setMyDisplayName] = useState('');
+  const [myDeviceId, setMyDeviceId] = useState('');
+  const [peers, setPeers] = useState([]);
+  const [chatSessions, setChatSessions] = useState({});
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
+  const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
+
+  // Bootstrap initial signup verification and database setup
   useEffect(() => {
     async function checkUserSignup() {
       try {
+        initDb();
         const signedUp = await isSignedUp();
+        if (signedUp) {
+          // Request Location/Bluetooth permissions on startup to ensure P2P works
+          try {
+            await requestNearbyPermissions();
+          } catch (pe) {
+            console.warn('Failed to request startup permissions:', pe);
+          }
+
+          const [displayName, deviceId] = await Promise.all([
+            getDisplayName(),
+            getOrCreateDeviceId(),
+          ]);
+
+          setMyDisplayName(displayName);
+          setMyDeviceId(deviceId);
+
+          // Read known peers from local database
+          const storedPeers = getAllPeers().map((peer) => normalizePeer({
+            id: peer.deviceId || peer.endpointId,
+            deviceId: peer.deviceId || peer.endpointId,
+            endpointId: peer.endpointId || peer.deviceId,
+            displayName: peer.displayName,
+            name: peer.displayName,
+            connected: false,
+            status: 'Offline',
+            connectionState: 'offline',
+            avatarStatusColor: '#6b7280',
+            added: true,
+            lastSeen: peer.lastSeen,
+          }));
+
+          setPeers(storedPeers);
+        }
         setIsUserSignedUp(signedUp);
       } catch (e) {
-        console.error('Failed to check user signup state', e);
+        console.error('[MeshLink App] Failed to bootstrap app state:', e);
       } finally {
         setLoading(false);
       }
     }
     checkUserSignup();
-  }, []);
+  }, [isUserSignedUp]);
 
+  // Navigation route listener to automatically activate the mesh nodes once registration completes
+  useEffect(() => {
+    const unsubscribe = navigationRef.addListener('state', async () => {
+      if (navigationRef.isReady() && !isUserSignedUp) {
+        const route = navigationRef.getCurrentRoute();
+        if (route?.name === 'Main') {
+          const signedUp = await isSignedUp();
+          if (signedUp) {
+            setIsUserSignedUp(true);
+          }
+        }
+      }
+    });
+    return unsubscribe;
+  }, [isUserSignedUp]);
+
+  // Subscribe to Native/Simulated P2P Events when user is authenticated
   useEffect(() => {
     if (!isUserSignedUp) return;
 
-    let subConnected, subDisconnected, subPayload;
-    
+    let subDiscovered, subRequest, subConnected, subDisconnected, subRejected, subPayload, subTransportStatus, subTransportError;
+
     async function initMesh() {
       try {
-        const { 
-          startMeshNode, 
-          onPeerConnected, 
-          onPeerDisconnected, 
-          onPayloadReceived 
-        } = require('./Helper/NearbyBridge');
-
         const name = await getDisplayName();
-        startMeshNode(name);
+        const id = await getOrCreateDeviceId();
+        setMyDisplayName(name);
+        setMyDeviceId(id);
 
-        // Listen for new connections
-        subConnected = onPeerConnected((event) => {
-          const { endpointId, displayName } = event || {};
+        const locationServicesEnabled = await checkLocationServicesEnabled();
+        if (!locationServicesEnabled) {
+          console.warn('[MeshLink P2P] Location services (GPS) are disabled; not starting transport.');
+          Alert.alert(
+            'Location Services Required',
+            'MeshLink uses peer-to-peer Wi-Fi and Bluetooth to connect offline, which requires Location services (GPS) to be turned ON. Please enable GPS and try again.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+
+        const nearbyPermissionResult = await requestNearbyPermissions();
+        if (!isNearbyPermissionResultGranted(nearbyPermissionResult)) {
+          console.warn('[MeshLink P2P] Nearby permissions are blocked; not starting transport.', nearbyPermissionResult);
+          Alert.alert(
+            'Nearby permission blocked',
+            'MeshLink needs Nearby devices permission to discover phones around you. Open app settings, allow Nearby devices, then reopen MeshLink on both phones.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+
+        const updatePeer = (endpointId, nextState) => {
+          setPeers((currentPeers) => {
+            const index = currentPeers.findIndex((peer) => peer.endpointId === endpointId || peer.id === endpointId || peer.deviceId === endpointId);
+            if (index === -1) {
+              return currentPeers;
+            }
+
+            const updated = normalizePeer({
+              ...currentPeers[index],
+              ...nextState,
+            });
+
+            const nextPeers = [...currentPeers];
+            nextPeers[index] = updated;
+            return nextPeers;
+          });
+        };
+
+        const ensurePeer = (endpointId, displayNameValue, extra = {}) => {
+          setPeers((currentPeers) => {
+            const index = currentPeers.findIndex((peer) => peer.endpointId === endpointId || peer.id === endpointId || peer.deviceId === endpointId || peer.displayName === displayNameValue || peer.name === displayNameValue);
+            const nextPeer = normalizePeer({
+              id: endpointId,
+              deviceId: endpointId,
+              endpointId,
+              displayName: displayNameValue || 'Nearby Device',
+              name: displayNameValue || 'Nearby Device',
+              status: extra.status || 'Nearby • Tap to connect',
+              connectionState: extra.connectionState || 'discovered',
+              connected: !!extra.connected,
+              avatarStatusColor: extra.avatarStatusColor || '#fbbf24',
+              added: extra.added ?? false,
+              lastSeen: Date.now(),
+            });
+
+            if (index === -1) {
+              return [...currentPeers, nextPeer];
+            }
+
+            const merged = normalizePeer({
+              ...currentPeers[index],
+              ...nextPeer,
+              ...extra,
+            });
+
+            const nextPeers = [...currentPeers];
+            nextPeers[index] = merged;
+            return nextPeers;
+          });
+        };
+
+        // 1. Peer Discovered
+        subDiscovered = onPeerDiscovered((event) => {
+          const { endpointId, displayName: discoveredName } = event || {};
           if (!endpointId) return;
 
-          setPeers(prev => {
-            const exists = prev.some(p => p.endpointId === endpointId || p.name === displayName);
-            if (exists) {
-              return prev.map(p => (p.endpointId === endpointId || p.name === displayName) 
-                ? { ...p, status: 'Connected • Just now', avatarStatusColor: '#10b981', endpointId } 
-                : p
-              );
-            }
-            return [...prev, {
-              name: displayName || 'Nearby Node',
-              status: 'Connected • Just now',
-              level: 'STRONG',
-              avatarStatusColor: '#10b981',
-              added: false,
-              endpointId
-            }];
+          ensurePeer(endpointId, discoveredName, {
+            status: 'Nearby • Tap to connect',
+            connectionState: 'discovered',
+            avatarStatusColor: '#fbbf24',
           });
         });
 
-        // Listen for disconnections
+        // 2. Incoming Connection Request
+        subRequest = onConnectionRequest((event) => {
+          const { endpointId, displayName: requestName } = event || {};
+          if (!endpointId) return;
+
+          ensurePeer(endpointId, requestName, {
+            status: 'Connection request',
+            connectionState: 'requesting',
+            avatarStatusColor: '#f59e0b',
+          });
+
+          Alert.alert(
+            'Nearby Connection Request',
+            `${requestName || 'Nearby device'} wants to connect to MeshLink.`,
+            [
+              {
+                text: 'Reject',
+                style: 'cancel',
+                onPress: () => rejectConnection(endpointId),
+              },
+              {
+                text: 'Accept',
+                onPress: () => acceptConnection(endpointId),
+              },
+            ]
+          );
+        });
+
+        // 3. Connection Established Successfully
+        subConnected = onPeerConnected((event) => {
+          const { endpointId, displayName: connectedName } = event || {};
+          if (!endpointId) return;
+
+          ensurePeer(endpointId, connectedName, {
+            status: 'Connected • Just now',
+            connectionState: 'connected',
+            connected: true,
+            avatarStatusColor: '#10b981',
+            added: true,
+          });
+
+          // Send handshake envelope to exchange permanent device IDs
+          const handshake = createHandshakeEnvelope({
+            senderId: id,
+            senderName: name,
+            recipientId: endpointId,
+          });
+          sendMessage(endpointId, handshake);
+        });
+
+        // 4. Peer Disconnected
         subDisconnected = onPeerDisconnected((event) => {
           const { endpointId } = event || {};
           if (!endpointId) return;
 
-          setPeers(prev => prev.map(p => p.endpointId === endpointId 
-            ? { ...p, status: 'Offline', avatarStatusColor: '#6b7280' } 
-            : p
-          ));
+          updatePeer(endpointId, {
+            status: 'Offline',
+            connectionState: 'offline',
+            connected: false,
+            avatarStatusColor: '#6b7280',
+          });
         });
 
-        // Listen for incoming messages
+        // 5. Connection Request Rejected
+        subRejected = onConnectionRejected((event) => {
+          const { endpointId } = event || {};
+          if (!endpointId) return;
+
+          updatePeer(endpointId, {
+            status: 'Rejected',
+            connectionState: 'rejected',
+            connected: false,
+            avatarStatusColor: '#ef4444',
+          });
+        });
+
+        // 6. Message Payload Received
         subPayload = onPayloadReceived((event) => {
           const { endpointId, payload } = event || {};
           if (!endpointId || !payload) return;
 
-          try {
-            const data = JSON.parse(payload);
-            setPeers(currentPeers => {
-              const peer = currentPeers.find(p => p.endpointId === endpointId);
-              const senderName = peer ? peer.name : 'Nearby Node';
+          const parsed = parseEnvelope(payload);
+          const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-              setChatSessions(prev => ({
-                ...prev,
-                [senderName]: [...(prev[senderName] || []), {
-                  id: String(Date.now()),
-                  sender: 'peer',
-                  text: data.text || '',
-                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  ...data
-                }]
-              }));
+          setPeers((currentPeers) => {
+            const peerIndex = currentPeers.findIndex((peer) => peer.endpointId === endpointId || peer.deviceId === endpointId || peer.id === endpointId);
+            const peer = peerIndex >= 0 ? currentPeers[peerIndex] : null;
+            const peerKey = peer?.id || endpointId;
 
-              return currentPeers;
+            // Handle P2P Handshake Message (Identity Mapping)
+            if (parsed?.type === 'handshake') {
+              const nextDisplayName = parsed?.payload?.displayName || parsed?.displayName || peer?.displayName || 'Nearby Device';
+              const nextDeviceId = parsed?.payload?.deviceId || parsed?.deviceId || peer?.deviceId || endpointId;
+
+              const updatedPeer = normalizePeer({
+                ...(peer || {}),
+                id: peerKey,
+                deviceId: nextDeviceId,
+                endpointId,
+                displayName: nextDisplayName,
+                name: nextDisplayName,
+                connected: true,
+                status: 'Connected • Handshake complete',
+                connectionState: 'connected',
+                avatarStatusColor: '#10b981',
+                added: true,
+              });
+
+              // Save the peer to local SQLite DB
+              upsertPeer({
+                deviceId: nextDeviceId,
+                displayName: nextDisplayName,
+                endpointId,
+                lastSeen: Date.now(),
+                connected: true,
+              });
+
+              if (peerIndex >= 0) {
+                const nextPeers = [...currentPeers];
+                nextPeers[peerIndex] = updatedPeer;
+                return nextPeers;
+              }
+
+              return [...currentPeers, updatedPeer];
+            }
+
+            // Handle Normal Chat Message
+            const messageEnvelope = {
+              id: parsed?.id || String(Date.now()),
+              sender: 'peer',
+              text: parsed?.text || parsed?.payload?.text || '',
+              time: nowTime,
+              ...parsed,
+            };
+
+            const resolvedPeerKey = peer?.id || endpointId;
+
+            setChatSessions((prev) => ({
+              ...prev,
+              [resolvedPeerKey]: [...(prev[resolvedPeerKey] || []), messageEnvelope],
+            }));
+
+            // Save the incoming message to local SQLite DB using permanent senderId if resolved
+            saveMessage({
+              id: messageEnvelope.id,
+              senderId: peer?.deviceId || endpointId,
+              recipientId: myDeviceId || 'LOCAL',
+              senderName: peer?.displayName || peer?.name || 'Nearby Device',
+              type: parsed?.type || 'chat',
+              payload: JSON.stringify(parsed || { text: messageEnvelope.text }),
+              timestamp: Date.now(),
+              ttl: 5,
+              delivered: true,
             });
-          } catch (e) {
-            console.error('Failed to parse incoming payload', e);
-          }
+
+            if (peerIndex >= 0) {
+              const nextPeers = [...currentPeers];
+              nextPeers[peerIndex] = normalizePeer({
+                ...currentPeers[peerIndex],
+                connected: true,
+                status: 'Connected • Active',
+                connectionState: 'connected',
+                avatarStatusColor: '#10b981',
+              });
+              return nextPeers;
+            }
+
+            return currentPeers;
+          });
         });
 
+        subTransportStatus = onTransportStatus((event) => {
+          console.log('[MeshLink P2P] Transport status:', event);
+        });
+
+        subTransportError = onTransportError((event) => {
+          console.warn('[MeshLink P2P] Transport error:', event);
+        });
+
+        // Start scanning/advertising only after listeners are attached.
+        startTransport(name);
+
       } catch (e) {
-        console.error('Failed to start mesh node:', e);
+        console.error('[MeshLink P2P] Failed to initialize P2P mesh network:', e);
       }
     }
 
@@ -268,51 +553,28 @@ export default function App() {
 
     return () => {
       try {
-        const { stopMeshNode } = require('./Helper/NearbyBridge');
-        stopMeshNode();
+        stopTransport();
+        subDiscovered?.remove();
+        subRequest?.remove();
         subConnected?.remove();
         subDisconnected?.remove();
+        subRejected?.remove();
         subPayload?.remove();
+        subTransportStatus?.remove();
+        subTransportError?.remove();
       } catch (e) {
         console.warn('Failed to clean up mesh node listeners:', e);
       }
     };
   }, [isUserSignedUp]);
 
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
-  const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
-
-  const [peers, setPeers] = useState([
-    { name: 'Sarah Chen', status: 'Connected • 12m', level: 'STRONG', avatarStatusColor: '#10b981', added: true },
-    { name: 'Marcus Thorne', status: 'Relay Node • 45m', level: 'FAIR', avatarStatusColor: '#fbbf24', added: true },
-    { name: 'Elena Rodriguez', status: 'Offline • 150m', level: 'POOR', avatarStatusColor: '#6b7280', added: false }
-  ]);
-
-  const [chatSessions, setChatSessions] = useState({
-    'Sarah Chen': [
-      { id: '1', sender: 'peer', text: 'Hi! I am testing the local mesh node on this channel. Are you receiving?', time: '14:10' },
-      { id: '2', sender: 'me', text: 'Acknowledged Sarah, signal is strong.', time: '14:12', status: 'Delivered' }
-    ],
-    'Marcus Thorne': [
-      { id: '1', sender: 'peer', text: 'Standing by as a relay bridge in Old Mill Sector.', time: '13:45' }
-    ],
-    'Elena Rodriguez': [],
-    'Elias Thorne': [
-      { id: '1', sender: 'peer', text: 'Signal strength is dropping near the old bridge. Are you still seeing the relay active on your side?', time: '14:26' },
-      { id: '2', sender: 'me', text: "Acknowledged. I've re-routed through Node 7. Signal should stabilize in the next 30 seconds.", time: '14:28', status: 'Delivered' },
-      { id: '3', sender: 'peer', text: "I'm holding position here. The mesh pulse looks steady for now.", time: '14:30', isLocation: true, locationTitle: 'Shared Location', locationSub: 'Old Mill Sector' },
-      { id: '4', sender: 'me', text: 'Copy that. I\'m moving to the north ridge to boost the signal. Keep your SOS on standby just in case.', time: '14:32', status: 'Delivered' }
-    ]
-  });
-
   const handleAddPeer = (newPeer) => {
-    setPeers(prev => [...prev, newPeer]);
+    setPeers((prev) => [...prev, normalizePeer(newPeer)]);
   };
 
   const handleToggleContactStatus = (peerName) => {
-    setPeers(prev => prev.map(p => {
-      if (p.name === peerName) {
+    setPeers((prev) => prev.map((p) => {
+      if (p.name === peerName || p.displayName === peerName) {
         const updatedStatus = !p.added;
         Alert.alert("Mesh Contact", updatedStatus ? `${peerName} added to contacts.` : `${peerName} removed from contacts.`);
         return { ...p, added: updatedStatus };
@@ -322,19 +584,29 @@ export default function App() {
   };
 
   const handleDeleteChat = (peerName) => {
-    setChatSessions(prev => ({
+    const resolvedPeer = typeof peerName === 'string' ? peers.find((peer) => peer.id === peerName || peer.name === peerName || peer.displayName === peerName) : peerName;
+    const peerKey = resolvedPeer?.id || peerName;
+
+    setChatSessions((prev) => ({
       ...prev,
-      [peerName]: []
+      [peerKey]: []
     }));
   };
 
-  const handleSendChatMessage = (peerName, text, attachment = null) => {
-    if (!text.trim() && !attachment) return;
+  const handleSendChatMessage = (peerKey, text, attachment = null) => {
+    const peer = peers.find((item) => item.id === peerKey || item.endpointId === peerKey || item.displayName === peerKey || item.name === peerKey);
+    if (!peer) {
+      Alert.alert('Connection unavailable', 'That nearby device is not available right now.');
+      return;
+    }
+
+    if (peer.connectionState !== 'connected' && peer.status !== 'Connected • Just now' && peer.status !== 'Connected • Active' && peer.status !== 'Connected • Handshake complete') {
+      Alert.alert('Not connected', 'Connect to the nearby device before sending messages.');
+      return;
+    }
 
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const timeStr = `${hours}:${minutes}`;
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newMsg = {
       id: String(Date.now()),
@@ -345,20 +617,78 @@ export default function App() {
       ...attachment
     };
 
-    setChatSessions(prev => ({
+    setChatSessions((prev) => ({
       ...prev,
-      [peerName]: [...(prev[peerName] || []), newMsg]
+      [peerKey]: [...(prev[peerKey] || []), newMsg]
     }));
 
-    // Find the peer's endpointId and send it over the P2P connection
-    const peer = peers.find(p => p.name === peerName);
-    if (peer && peer.endpointId) {
-      try {
-        const { sendToPeer } = require('./Helper/NearbyBridge');
-        sendToPeer(peer.endpointId, { text, ...attachment });
-      } catch (e) {
-        console.warn('Failed to transmit message over P2P radio:', e);
-      }
+    const envelope = createMessageEnvelope({
+      senderId: myDeviceId || 'LOCAL',
+      senderName: myDisplayName || 'Me',
+      recipientId: peer.deviceId || peer.endpointId || peerKey,
+      type: 'chat',
+      payload: {
+        text,
+        ...attachment,
+      },
+      ttl: 5,
+    });
+
+    saveMessage({
+      ...envelope,
+      payload: JSON.stringify({ text, ...attachment }),
+      delivered: true,
+      senderName: myDisplayName || 'Me',
+    });
+
+    sendMessage(peer.endpointId, envelope);
+  };
+
+  const handleOpenPeerChat = (peerInput) => {
+    const peer = typeof peerInput === 'string'
+      ? peers.find((item) => item.id === peerInput || item.endpointId === peerInput || item.displayName === peerInput || item.name === peerInput)
+      : peerInput;
+
+    if (!peer) {
+      return;
+    }
+
+    // Attempt connection request if not already connected
+    if (peer.endpointId && peer.connectionState !== 'connected') {
+      requestConnection(peer.endpointId, myDisplayName || 'MeshLink');
+      setPeers((currentPeers) => currentPeers.map((item) => item.id === peer.id ? {
+        ...item,
+        status: 'Connecting...',
+        connectionState: 'connecting',
+        avatarStatusColor: '#f59e0b',
+      } : item));
+    }
+
+    // Load active chat logs from database
+    if (peer.endpointId && myDeviceId) {
+      const existingMessages = getMessagesWithPeer(myDeviceId, peer.deviceId || peer.endpointId).map((row) => ({
+        id: row.id,
+        sender: row.senderId === myDeviceId ? 'me' : 'peer',
+        text: (() => {
+          try {
+            const parsed = JSON.parse(row.payload || '{}');
+            return parsed.text || '';
+          } catch (e) {
+            return row.payload || '';
+          }
+        })(),
+        time: new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: row.delivered ? 'Delivered' : 'Pending',
+      }));
+
+      setChatSessions((prev) => ({
+        ...prev,
+        [peer.id]: prev[peer.id]?.length ? prev[peer.id] : existingMessages,
+      }));
+    }
+
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('Chat', { peerName: peer.displayName || peer.name, peerKey: peer.id });
     }
   };
 
@@ -415,18 +745,23 @@ export default function App() {
                   handleToggleContactStatus={handleToggleContactStatus}
                   handleDeleteChat={handleDeleteChat}
                   setShowConfirmModal={setShowConfirmModal}
+                  onStartChat={handleOpenPeerChat}
                 />
               )}
             </Stack.Screen>
             <Stack.Screen name="Chat">
               {(props) => {
+                const peerKey = props.route.params?.peerKey || props.route.params?.peerName;
                 const peerName = props.route.params?.peerName;
+                const peer = peers.find((item) => item.id === peerKey || item.name === peerName || item.displayName === peerName || item.endpointId === peerKey);
                 return (
                   <ChatScreen
                     {...props}
-                    peerName={peerName}
-                    messages={chatSessions[peerName] || []}
-                    onSendMessage={(text, attachment) => handleSendChatMessage(peerName, text, attachment)}
+                    peerName={peerName || peer?.displayName || peer?.name || 'Nearby Device'}
+                    peerKey={peer?.id || peerKey}
+                    connectionState={peer?.connectionState}
+                    messages={chatSessions[peer?.id || peerKey] || []}
+                    onSendMessage={(text, attachment) => handleSendChatMessage(peer?.id || peerKey, text, attachment)}
                     onBack={() => props.navigation.goBack()}
                     onTabChange={(tab) => {
                       setActiveTab(tab);
@@ -473,7 +808,7 @@ export default function App() {
           </Stack.Navigator>
         </NavigationContainer>
 
-        {/* SOS Confirmation */}
+        {/* SOS Confirmation Modal */}
         <Modal
           visible={showConfirmModal}
           transparent={true}
@@ -516,7 +851,7 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* SOS Responder */}
+        {/* SOS Responder Options Modal */}
         <Modal
           visible={showSOSOptionsModal}
           transparent={true}
@@ -573,7 +908,6 @@ export default function App() {
             </BlurView>
           </View>
         </Modal>
-
       </SafeAreaView>
     </SafeAreaProvider>
   );

@@ -1,140 +1,184 @@
-// mesh/NearbyBridge.js
-//
-// This is the JS-side wrapper around your native Kotlin Bluetooth module
-// (NearbyModule.kt). Everything here is "finding users" and "sending raw
-// data" — no internet, no server, just direct radio communication.
-//
-// FALLBACK: If NearbyModule is not present (running in Expo Go or Web),
-// it runs a high-fidelity simulator that triggers mock peer discovery
-// and automated messaging, letting you test the radar, network map, and
-// chat features directly!
+import { requireNativeModule, EventEmitter } from 'expo';
 
-import { NativeModules, NativeEventEmitter } from 'react-native';
-
-const { NearbyModule } = NativeModules;
-
-// Create event emitter safely only if the native module is present
-let nearbyEvents = null;
-if (NearbyModule) {
-  try {
-    nearbyEvents = new NativeEventEmitter(NearbyModule);
-  } catch (e) {
-    console.warn('[MeshLink P2P] Failed to initialize NativeEventEmitter:', e);
+let NearbyModule = null;
+let nearbyEventEmitter = null;
+try {
+  NearbyModule = requireNativeModule('NearbyModule');
+  if (NearbyModule) {
+    nearbyEventEmitter = new EventEmitter(NearbyModule);
   }
-} else {
-  console.log('[MeshLink P2P] NearbyModule is null. Launching simulated mode for Expo Go / Simulator.');
+} catch (e) {
+  console.log('[MeshLink P2P] NearbyModule is unavailable. Using simulator mode.');
 }
 
-// Simulated active listeners array
 const simulatedListeners = {
+  onPeerDiscovered: [],
+  onConnectionRequest: [],
   onPeerConnected: [],
   onPeerDisconnected: [],
-  onPayloadReceived: []
+  onConnectionRejected: [],
+  onPayloadReceived: [],
+  onTransportStatus: [],
+  onTransportError: [],
 };
 
-// Simulated nodes repository
-const MOCK_PEERS = [
-  { endpointId: 'sim-sarah', displayName: 'Sarah Chen', delay: 4000 },
-  { endpointId: 'sim-marcus', displayName: 'Marcus Thorne', delay: 8000 },
-  { endpointId: 'sim-elena', displayName: 'Elena Rodriguez', delay: 12000 }
-];
+const MOCK_PEERS = [];
 
-let simulatorIntervals = [];
+let simulatorTimers = [];
+const simulatorConnections = new Set();
 
-// ---------- FINDING USERS (discovery) ----------
+function addListener(eventName, callback) {
+  if (!NearbyModule || !nearbyEventEmitter) {
+    simulatedListeners[eventName].push(callback);
+    return {
+      remove: () => {
+        simulatedListeners[eventName] = simulatedListeners[eventName].filter((cb) => cb !== callback);
+      },
+    };
+  }
+
+  return nearbyEventEmitter.addListener(eventName, callback);
+}
+
+function emitSimulated(eventName, payload) {
+  simulatedListeners[eventName].forEach((callback) => callback(payload));
+}
 
 export function startMeshNode(displayName) {
   if (!NearbyModule) {
     console.warn('[MeshLink P2P] Native module missing. Running P2P discovery in SIMULATOR mode.');
-    
-    // Simulate discovering mock nodes sequentially
-    MOCK_PEERS.forEach((peer) => {
-      const timeout = setTimeout(() => {
-        // Trigger simulated peer discovery connection
-        simulatedListeners.onPeerConnected.forEach(cb => {
-          cb({ endpointId: peer.endpointId, displayName: peer.displayName });
-        });
-
-        // Periodically send mock payloads from discovered peers
-        const msgInterval = setInterval(() => {
-          const mockMessages = [
-            `Hi! I am testing the local mesh node on this channel. Are you receiving?`,
-            `Standing by as a relay bridge in your sector.`,
-            `Mesh pulse looks steady on my monitor.`,
-            `Signal is strong. Re-routed packet through local relay.`
-          ];
-          const randomMsg = mockMessages[Math.floor(Math.random() * mockMessages.length)];
-          
-          simulatedListeners.onPayloadReceived.forEach(cb => {
-            cb({
-              endpointId: peer.endpointId,
-              payload: JSON.stringify({ text: randomMsg })
-            });
-          });
-        }, 15000 + Math.random() * 10000);
-
-        simulatorIntervals.push(msgInterval);
-
-      }, peer.delay);
-
-      simulatorIntervals.push(timeout);
-    });
-
+    emitSimulated('onTransportStatus', { state: 'simulator', detail: 'Native NearbyModule unavailable' });
     return;
   }
 
   try {
+    console.log(`[MeshLink P2P] Starting Nearby transport as "${displayName || 'MeshLink'}"`);
     NearbyModule.startAdvertising(displayName);
     NearbyModule.startDiscovery();
   } catch (e) {
     console.error('[MeshLink P2P] Failed to start native mesh node:', e);
+    emitSimulated('onTransportError', { operation: 'startMeshNode', message: e.message || String(e) });
   }
 }
 
 export function stopMeshNode() {
   if (!NearbyModule) {
-    // Clear all simulation loops
-    simulatorIntervals.forEach(item => {
-      clearTimeout(item);
-      clearInterval(item);
+    simulatorTimers.forEach((timer) => {
+      clearTimeout(timer);
+      clearInterval(timer);
     });
-    simulatorIntervals = [];
+    simulatorTimers = [];
+    simulatorConnections.clear();
     return;
   }
+
   try {
     NearbyModule.stopAdvertising?.();
     NearbyModule.stopDiscovery?.();
+    NearbyModule.stopAllEndpoints?.();
   } catch (e) {
     console.error('[MeshLink P2P] Failed to stop native mesh node:', e);
   }
 }
 
-// ---------- SENDING DATA ----------
+export function requestPeerConnection(endpointId, displayName) {
+  if (!NearbyModule) {
+    const requestTimer = setTimeout(() => {
+      emitSimulated('onConnectionRequest', {
+        endpointId,
+        displayName: displayName || 'Nearby Device',
+      });
+    }, 150);
+
+    const acceptTimer = setTimeout(() => {
+      simulatorConnections.add(endpointId);
+      emitSimulated('onPeerConnected', {
+        endpointId,
+        displayName: displayName || 'Nearby Device',
+      });
+    }, 700);
+
+    simulatorTimers.push(requestTimer, acceptTimer);
+    return;
+  }
+
+  try {
+    NearbyModule.requestPeerConnection(endpointId, displayName || 'MeshLink');
+  } catch (e) {
+    console.error('[MeshLink P2P] Failed to request peer connection:', e);
+  }
+}
+
+export function acceptPeerConnection(endpointId) {
+  if (!NearbyModule) {
+    simulatorConnections.add(endpointId);
+    emitSimulated('onPeerConnected', { endpointId, displayName: 'Nearby Device' });
+    return;
+  }
+
+  try {
+    NearbyModule.acceptPeerConnection(endpointId);
+  } catch (e) {
+    console.error('[MeshLink P2P] Failed to accept peer connection:', e);
+  }
+}
+
+export function rejectPeerConnection(endpointId) {
+  if (!NearbyModule) {
+    emitSimulated('onConnectionRejected', { endpointId });
+    return;
+  }
+
+  try {
+    NearbyModule.rejectPeerConnection(endpointId);
+  } catch (e) {
+    console.error('[MeshLink P2P] Failed to reject peer connection:', e);
+  }
+}
+
+export function disconnectPeer(endpointId) {
+  if (!NearbyModule) {
+    simulatorConnections.delete(endpointId);
+    emitSimulated('onPeerDisconnected', { endpointId });
+    return;
+  }
+
+  try {
+    NearbyModule.disconnectPeer(endpointId);
+  } catch (e) {
+    console.error('[MeshLink P2P] Failed to disconnect peer:', e);
+  }
+}
 
 export function sendToPeer(endpointId, messageObject) {
   if (!NearbyModule) {
-    console.log(`[MeshLink P2P Sim] Sent payload to ${endpointId}:`, messageObject);
-    
-    // Simulate automated replies from the simulator
-    if (endpointId.startsWith('sim-')) {
-      setTimeout(() => {
-        const replies = [
-          "Copy that. I'm receiving your mesh packets clearly.",
-          "Acknowledged. Routing signal through nearby node.",
-          "Confirmed. Mesh pulse is steady.",
-          "Received! System logs updated offline."
-        ];
-        const randomReply = replies[Math.floor(Math.random() * replies.length)];
-        simulatedListeners.onPayloadReceived.forEach(cb => {
-          cb({
-            endpointId,
-            payload: JSON.stringify({ text: randomReply })
-          });
-        });
-      }, 2000);
+    if (!simulatorConnections.has(endpointId)) {
+      console.warn(`[MeshLink P2P Sim] Attempted to send to disconnected endpoint ${endpointId}`);
+      return;
     }
+
+    const echoTimer = setTimeout(() => {
+      const replies = [
+        'Copy that. I am receiving your mesh packets clearly.',
+        'Acknowledged. Routing signal through the nearby link.',
+        'Confirmed. The local connection is steady.',
+        'Received offline. Mesh session looks healthy.',
+      ];
+      const randomReply = replies[Math.floor(Math.random() * replies.length)];
+      emitSimulated('onPayloadReceived', {
+        endpointId,
+        payload: JSON.stringify({
+          id: `sim-${Date.now()}`,
+          type: 'chat',
+          text: randomReply,
+        }),
+      });
+    }, 1000);
+
+    simulatorTimers.push(echoTimer);
     return;
   }
+
   try {
     NearbyModule.sendPayload(endpointId, JSON.stringify(messageObject));
   } catch (e) {
@@ -142,40 +186,44 @@ export function sendToPeer(endpointId, messageObject) {
   }
 }
 
-// ---------- LISTENING FOR EVENTS ----------
+export function onPeerDiscovered(callback) {
+  return addListener('onPeerDiscovered', callback);
+}
+
+export function onConnectionRequest(callback) {
+  return addListener('onConnectionRequest', callback);
+}
 
 export function onPeerConnected(callback) {
-  if (!nearbyEvents) {
-    simulatedListeners.onPeerConnected.push(callback);
-    return {
-      remove: () => {
-        simulatedListeners.onPeerConnected = simulatedListeners.onPeerConnected.filter(cb => cb !== callback);
-      }
-    };
-  }
-  return nearbyEvents.addListener('onPeerConnected', callback);
+  return addListener('onPeerConnected', callback);
 }
 
 export function onPeerDisconnected(callback) {
-  if (!nearbyEvents) {
-    simulatedListeners.onPeerDisconnected.push(callback);
-    return {
-      remove: () => {
-        simulatedListeners.onPeerDisconnected = simulatedListeners.onPeerDisconnected.filter(cb => cb !== callback);
-      }
-    };
-  }
-  return nearbyEvents.addListener('onPeerDisconnected', callback);
+  return addListener('onPeerDisconnected', callback);
+}
+
+export function onConnectionRejected(callback) {
+  return addListener('onConnectionRejected', callback);
 }
 
 export function onPayloadReceived(callback) {
-  if (!nearbyEvents) {
-    simulatedListeners.onPayloadReceived.push(callback);
-    return {
-      remove: () => {
-        simulatedListeners.onPayloadReceived = simulatedListeners.onPayloadReceived.filter(cb => cb !== callback);
-      }
-    };
-  }
-  return nearbyEvents.addListener('onPayloadReceived', callback);
+  return addListener('onPayloadReceived', callback);
 }
+
+export function onTransportStatus(callback) {
+  return addListener('onTransportStatus', callback);
+}
+
+export function onTransportError(callback) {
+  return addListener('onTransportError', callback);
+}
+
+// Backward-compatible aliases used by older screens and helpers.
+export const startAdvertising = startMeshNode;
+export const startDiscovery = startMeshNode;
+export const stopAdvertising = stopMeshNode;
+export const stopDiscovery = stopMeshNode;
+export const requestConnection = requestPeerConnection;
+export const acceptConnection = acceptPeerConnection;
+export const rejectConnection = rejectPeerConnection;
+export const disconnectFromPeer = disconnectPeer;

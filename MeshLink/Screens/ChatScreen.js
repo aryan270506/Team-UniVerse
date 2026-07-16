@@ -25,7 +25,8 @@ export default function ChatScreen({
   onSendMessage,
   onBack,
   onTabChange,
-  triggerSOS
+  triggerSOS,
+  connectionState
 }) {
   const insets = useSafeAreaInsets();
   const [chatMessage, setChatMessage] = React.useState('');
@@ -182,10 +183,20 @@ export default function ChatScreen({
         <View style={styles.chatPeerInfo}>
           <Text style={styles.chatPeerName}>{peerName}</Text>
           <View style={styles.chatPeerStatusRow}>
-            <Text style={styles.chatPeerStatusText}>CONNECTED</Text>
+            <Text style={[
+              styles.chatPeerStatusText,
+              connectionState === 'connected' && { color: '#10b981' },
+              connectionState === 'connecting' && { color: '#fbbf24' },
+              connectionState === 'offline' && { color: '#6b7280' },
+              connectionState === 'rejected' && { color: '#ef4444' }
+            ]}>
+              {(connectionState || 'discovered').toUpperCase()}
+            </Text>
             <View style={styles.hopsBadge}>
               <MaterialCommunityIcons name="lan" size={10} color="#a5b4fc" style={styles.hopsIcon} />
-              <Text style={styles.hopsText}>2 HOPS</Text>
+              <Text style={styles.hopsText}>
+                {connectionState === 'connected' ? '1 HOP' : '0 HOPS'}
+              </Text>
             </View>
           </View>
         </View>
@@ -318,26 +329,40 @@ export default function ChatScreen({
           style={styles.chatAttachButton} 
           activeOpacity={0.7}
           onPress={() => setShowAttachmentMenu(true)}
+          disabled={connectionState !== 'connected'}
         >
-          <Feather name="plus" size={22} color="#94a3b8" />
+          <Feather name="plus" size={22} color={connectionState === 'connected' ? '#94a3b8' : '#334155'} />
         </TouchableOpacity>
-        <View style={styles.chatTextInputContainer}>
+        <View style={[
+          styles.chatTextInputContainer,
+          connectionState !== 'connected' && { backgroundColor: '#090f1d', borderColor: '#1e293b' }
+        ]}>
           <TextInput
-            placeholder="Type a secure message..."
-            placeholderTextColor="#4b5563"
-            style={styles.chatTextInput}
+            placeholder={
+              connectionState === 'connected'
+                ? "Type a secure message..."
+                : connectionState === 'connecting'
+                ? "Connecting to node..."
+                : "Connect to node to chat..."
+            }
+            placeholderTextColor={connectionState === 'connected' ? '#4b5563' : '#334155'}
+            style={[styles.chatTextInput, connectionState !== 'connected' && { color: '#475569' }]}
             value={chatMessage}
             onChangeText={setChatMessage}
             onSubmitEditing={handleSend}
+            editable={connectionState === 'connected'}
           />
         </View>
         <TouchableOpacity 
-          style={[styles.chatSendButton, !chatMessage.trim() && { opacity: 0.6 }]} 
+          style={[
+            styles.chatSendButton, 
+            (!chatMessage.trim() || connectionState !== 'connected') && { opacity: 0.4, backgroundColor: '#475569' }
+          ]} 
           activeOpacity={0.8}
           onPress={handleSend}
-          disabled={!chatMessage.trim()}
+          disabled={!chatMessage.trim() || connectionState !== 'connected'}
         >
-          <Feather name="send" size={18} color="#080e1b" />
+          <Feather name="send" size={18} color={connectionState === 'connected' ? '#080e1b' : '#1e293b'} />
         </TouchableOpacity>
       </View>
 

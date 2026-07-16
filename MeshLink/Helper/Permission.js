@@ -22,8 +22,6 @@ const ANDROID_BASE = [
   PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
   PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
   PermissionsAndroid.PERMISSIONS.CAMERA,
-  PermissionsAndroid.PERMISSIONS.ACCESS_WIFI_STATE,
-  PermissionsAndroid.PERMISSIONS.CHANGE_WIFI_STATE,
 ];
 
 // Android 12+ (API 31+): Bluetooth requires runtime permissions
@@ -31,6 +29,12 @@ const ANDROID_BLUETOOTH_31 = [
   PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
   PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
   PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+];
+
+// Android 13+ (API 33+): Nearby Wi-Fi devices permission is required by
+// modern Nearby/Wi-Fi discovery flows.
+const ANDROID_NEARBY_WIFI_33 = [
+  'android.permission.NEARBY_WIFI_DEVICES',
 ];
 
 // Android 13+ (API 33+): granular media permissions replace READ_EXTERNAL_STORAGE
@@ -45,6 +49,10 @@ const ANDROID_STORAGE_LEGACY = [
   PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
   PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
 ];
+
+function isGranted(value) {
+  return value === PermissionsAndroid.RESULTS.GRANTED || value === 'granted';
+}
 
 // ─── Core permission requester ────────────────────────────────────────────────
 export async function requestAllPermissions() {
@@ -61,7 +69,7 @@ export async function requestAllPermissions() {
       const toRequest = [...ANDROID_BASE];
 
       if (apiLevel >= 33) {
-        toRequest.push(...ANDROID_MEDIA_33);
+        toRequest.push(...ANDROID_NEARBY_WIFI_33);
       } else {
         toRequest.push(...ANDROID_STORAGE_LEGACY);
       }
@@ -111,6 +119,59 @@ export async function requestAllPermissions() {
   }
 }
 
+export async function requestNearbyPermissions() {
+  try {
+    if (Platform.OS === 'web') {
+      return { status: 'web_bypass' };
+    }
+
+    if (Platform.OS !== 'android') {
+      return requestAllPermissions();
+    }
+
+    const apiLevel = Platform.Version;
+    const toRequest = [
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+    ];
+
+    if (apiLevel >= 31) {
+      toRequest.push(...ANDROID_BLUETOOTH_31);
+    }
+
+    if (apiLevel >= 33) {
+      toRequest.push(...ANDROID_NEARBY_WIFI_33);
+    }
+
+    const granted = await PermissionsAndroid.requestMultiple(toRequest);
+    console.log('[MeshLink Permissions] Nearby Android results:', granted);
+    return granted;
+  } catch (e) {
+    console.error('[MeshLink Permissions] requestNearbyPermissions failed:', e);
+    return null;
+  }
+}
+
+export function isNearbyPermissionResultGranted(result) {
+  if (Platform.OS !== 'android' || !result) return true;
+
+  const apiLevel = Platform.Version;
+  const required = [
+    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+  ];
+
+  if (apiLevel >= 31) {
+    required.push(...ANDROID_BLUETOOTH_31);
+  }
+
+  // NEARBY_WIFI_DEVICES is requested but not strictly required to pass this check,
+  // to avoid blocking startup if the device manufacturer has separate permissions 
+  // or dynamic toggles that return "never_ask_again" but the native library can 
+  // still function over Bluetooth or other mediums.
+  return required.every((permission) => isGranted(result[permission]));
+}
+
 // ─── Called during signup — triggers native system dialogs directly ────────────
 export async function requestPermissionsAtSignup() {
   try {
@@ -118,6 +179,15 @@ export async function requestPermissionsAtSignup() {
   } catch (e) {
     console.error('[MeshLink Permissions] requestPermissionsAtSignup failed:', e);
     return null;
+  }
+}
+
+export async function checkLocationServicesEnabled() {
+  try {
+    return await Location.hasServicesEnabledAsync();
+  } catch (e) {
+    console.warn('[MeshLink Permissions] Failed to check if location services are enabled:', e);
+    return false;
   }
 }
 
@@ -154,6 +224,11 @@ export async function getMissingPermissions() {
         if (!scan || !advertise || !connect) {
           missing.push('Bluetooth (Nearby Devices)');
         }
+      }
+
+      if (apiLevel >= 33) {
+        const nearbyWifi = await PermissionsAndroid.check('android.permission.NEARBY_WIFI_DEVICES');
+        if (!nearbyWifi) missing.push('Nearby Wi-Fi Devices');
       }
     } else if (Platform.OS === 'ios') {
       const [camera, media, location] = await Promise.all([
