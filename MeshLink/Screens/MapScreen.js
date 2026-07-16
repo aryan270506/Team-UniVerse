@@ -57,14 +57,20 @@ export default function MapScreen({
     outputRange: ['0deg', '360deg'],
   });
 
-  // Peer coordinates on the tactical coordinate map
-  // Sarah Chen (Strong) - Near top right
-  // Marcus Thorne (Fair) - Middle left
-  // Elena Rodriguez (Offline) - Bottom right
-  const peerPositions = {
-    'Sarah Chen': { x: 260, y: 150, color: '#10b981', level: 'STRONG' },
-    'Marcus Thorne': { x: 90, y: 220, color: '#fbbf24', level: 'FAIR' },
-    'Elena Rodriguez': { x: 200, y: 380, color: '#6b7280', level: 'POOR' },
+  // Helper to dynamically calculate coordinate positions for any discovered node
+  const getPeerPosition = (peer) => {
+    const name = peer.name || peer.displayName || 'Nearby Node';
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const angle = Math.abs(hash % 360) * (Math.PI / 180);
+    const distance = 45 + (Math.abs(hash) % 105);
+    const x = 180 + Math.cos(angle) * distance;
+    const y = 260 + Math.sin(angle) * distance;
+    const level = peer.level || (distance < 80 ? 'STRONG' : distance < 120 ? 'FAIR' : 'POOR');
+    const color = peer.avatarStatusColor || (peer.connected ? '#10b981' : '#fbbf24');
+    return { x, y, color, level };
   };
 
   const handleSelectPeer = (peer) => {
@@ -159,10 +165,8 @@ export default function MapScreen({
         {/* Layer 3: Interactive Peer Dots & Name labels overlay */}
         <Svg width="100%" height="100%" viewBox="0 0 360 520" style={{ position: 'absolute', width: '100%', height: '100%' }}>
           {peers.map((peer) => {
-            const pos = peerPositions[peer.name];
-            if (!pos) return null;
-
-            const isSelected = selectedPeer?.name === peer.name;
+            const pos = getPeerPosition(peer);
+            const isSelected = selectedPeer?.name === peer.name || selectedPeer?.id === peer.id;
 
             return (
               <G key={peer.name} onPress={() => handleSelectPeer(peer)}>
@@ -214,16 +218,16 @@ export default function MapScreen({
         <View style={styles.cardContainer}>
           <View style={styles.peerCard}>
             <View style={styles.cardHeader}>
-              <View style={[styles.avatarContainer, { borderColor: peerPositions[selectedPeer.name]?.color }]}>
+              <View style={[styles.avatarContainer, { borderColor: getPeerPosition(selectedPeer).color }]}>
                 <Feather name="user" size={24} color="#a5b4fc" />
               </View>
               <View style={styles.headerDetails}>
-                <Text style={styles.peerName}>{selectedPeer.name}</Text>
+                <Text style={styles.peerName}>{selectedPeer.name || selectedPeer.displayName}</Text>
                 <Text style={styles.peerStatus}>{selectedPeer.status}</Text>
               </View>
               <View style={styles.signalTag}>
-                <Text style={[styles.signalText, { color: peerPositions[selectedPeer.name]?.color }]}>
-                  {peerPositions[selectedPeer.name]?.level}
+                <Text style={[styles.signalText, { color: getPeerPosition(selectedPeer).color }]}>
+                  {getPeerPosition(selectedPeer).level}
                 </Text>
               </View>
             </View>

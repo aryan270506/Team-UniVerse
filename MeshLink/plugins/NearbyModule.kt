@@ -39,7 +39,7 @@ class NearbyModule(private val reactContext: ReactApplicationContext) : ReactCon
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
-            // Can be used to track progress of sending/receiving
+            // Transfer progress can be surfaced later if attachment transfer is added.
         }
     }
 
@@ -47,9 +47,11 @@ class NearbyModule(private val reactContext: ReactApplicationContext) : ReactCon
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, connectionInfo: ConnectionInfo) {
             Log.d(TAG, "Connection initiated with $endpointId (${connectionInfo.endpointName})")
-            // Automatically accept the connection on both sides
-            Nearby.getConnectionsClient(reactContext)
-                .acceptConnection(endpointId, payloadCallback)
+            val params = Arguments.createMap().apply {
+                putString("endpointId", endpointId)
+                putString("displayName", connectionInfo.endpointName)
+            }
+            sendEvent("onConnectionRequest", params)
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
@@ -59,11 +61,13 @@ class NearbyModule(private val reactContext: ReactApplicationContext) : ReactCon
             if (result.status.isSuccess) {
                 Log.d(TAG, "Connected successfully to $endpointId")
                 params.putBoolean("success", true)
-                params.putString("displayName", "Mesh Node") // Temporary, or resolved from connection name
+                params.putString("displayName", "Mesh Node")
                 sendEvent("onPeerConnected", params)
             } else {
                 Log.d(TAG, "Connection failed with $endpointId")
                 params.putBoolean("success", false)
+                params.putString("error", result.status.statusMessage ?: "Connection failed")
+                sendEvent("onConnectionRejected", params)
             }
         }
 
@@ -80,9 +84,11 @@ class NearbyModule(private val reactContext: ReactApplicationContext) : ReactCon
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             Log.d(TAG, "Endpoint found: $endpointId (${info.endpointName})")
-            // Automatically request connection to establish mesh link
-            Nearby.getConnectionsClient(reactContext)
-                .requestConnection(info.endpointName, endpointId, connectionLifecycleCallback)
+            val params = Arguments.createMap().apply {
+                putString("endpointId", endpointId)
+                putString("displayName", info.endpointName)
+            }
+            sendEvent("onPeerDiscovered", params)
         }
 
         override fun onEndpointLost(endpointId: String) {
@@ -126,6 +132,60 @@ class NearbyModule(private val reactContext: ReactApplicationContext) : ReactCon
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "Failed to start discovery", e)
+            }
+    }
+
+    @ReactMethod
+    fun requestPeerConnection(endpointId: String, displayName: String) {
+        Nearby.getConnectionsClient(reactContext)
+            .requestConnection(displayName, endpointId, connectionLifecycleCallback)
+            .addOnSuccessListener {
+                Log.d(TAG, "Requested connection to $endpointId")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to request connection", e)
+                val params = Arguments.createMap().apply {
+                    putString("endpointId", endpointId)
+                    putBoolean("success", false)
+                    putString("error", e.message ?: "Failed to request connection")
+                }
+                sendEvent("onConnectionRejected", params)
+            }
+    }
+
+    @ReactMethod
+    fun acceptPeerConnection(endpointId: String) {
+        Nearby.getConnectionsClient(reactContext)
+            .acceptConnection(endpointId, payloadCallback)
+            .addOnSuccessListener {
+                Log.d(TAG, "Accepted connection from $endpointId")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to accept connection", e)
+            }
+    }
+
+    @ReactMethod
+    fun rejectPeerConnection(endpointId: String) {
+        Nearby.getConnectionsClient(reactContext)
+            .rejectConnection(endpointId)
+            .addOnSuccessListener {
+                Log.d(TAG, "Rejected connection from $endpointId")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to reject connection", e)
+            }
+    }
+
+    @ReactMethod
+    fun disconnectPeer(endpointId: String) {
+        Nearby.getConnectionsClient(reactContext)
+            .disconnectFromEndpoint(endpointId)
+            .addOnSuccessListener {
+                Log.d(TAG, "Disconnected from $endpointId")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to disconnect from $endpointId", e)
             }
     }
 
