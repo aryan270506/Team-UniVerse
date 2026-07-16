@@ -19,7 +19,7 @@ const SCAN_SIZE = width * 0.65;
 
 export default function ScannerScreen({ navigation, onAddPeer, onBack }) {
   const [activeMode, setActiveMode] = useState('scan'); // 'scan' | 'mycode'
-  
+
   // Animation value for the scanner sweep laser
   const laserAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0.4)).current;
@@ -69,9 +69,9 @@ export default function ScannerScreen({ navigation, onAddPeer, onBack }) {
       status: 'Connected • Just now',
       added: true,
     };
-    
+
     onAddPeer(simulatedPeer);
-    
+
     Alert.alert(
       "Mesh Linked",
       "Successfully scanned and connected to Liam Carter's node.",
@@ -110,105 +110,107 @@ export default function ScannerScreen({ navigation, onAddPeer, onBack }) {
           onPress={() => setActiveMode('mycode')}
           activeOpacity={0.7}
         >
-          <Feather name="qr-code" size={18} color={activeMode === 'mycode' ? '#ffffff' : '#94a3b8'} />
-          <Text style={[styles.tabText, activeMode === 'mycode' && styles.activeTabText]}>My QR Code</Text>
+          <MaterialCommunityIcons name="qrcode" size={20} color={activeMode === 'mycode' ? '#ffffff' : '#94a3b8'} />
+        <Text style={[styles.tabText, activeMode === 'mycode' && styles.activeTabText]}>My QR Code</Text>
+      </TouchableOpacity>
+    </View>
+
+      {/* Scanner Screen Content */ }
+  {
+    activeMode === 'scan' ? (
+      <View style={styles.scanContainer}>
+        <Text style={styles.instructions}>Align QR Code inside the scanner frame to link peer</Text>
+
+        {/* Viewfinder area */}
+        <View style={styles.viewfinderContainer}>
+          {/* Viewfinder background simulator (simulating camera with grid and nodes) */}
+          <View style={styles.cameraSimulator}>
+            <Svg width="100%" height="100%" viewBox="0 0 200 200">
+              {/* Tactical grid background inside camera view */}
+              <Path d="M 0 50 L 200 50 M 0 100 L 200 100 M 0 150 L 200 150 M 50 0 L 50 200 M 100 0 L 100 200 M 150 0 L 150 200" stroke="rgba(29, 78, 216, 0.1)" strokeWidth="1" />
+              <Circle cx="100" cy="100" r="10" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="1.5" fill="none" />
+              <Circle cx="100" cy="100" r="40" stroke="rgba(29, 78, 216, 0.15)" strokeWidth="1" fill="none" />
+            </Svg>
+          </View>
+
+          {/* Neon scanner brackets */}
+          <View style={styles.viewfinderFrame}>
+            {/* Top Left Bracket */}
+            <View style={[styles.bracket, styles.topLeftBracket]} />
+            {/* Top Right Bracket */}
+            <View style={[styles.bracket, styles.topRightBracket]} />
+            {/* Bottom Left Bracket */}
+            <View style={[styles.bracket, styles.bottomLeftBracket]} />
+            {/* Bottom Right Bracket */}
+            <View style={[styles.bracket, styles.bottomRightBracket]} />
+
+            {/* Laser sweep line */}
+            <Animated.View
+              style={[
+                styles.laserLine,
+                {
+                  transform: [
+                    {
+                      translateY: laserAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, SCAN_SIZE - 2],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Pulse scanning text */}
+        <Animated.View style={{ opacity: pulseAnim, marginTop: 24, alignItems: 'center' }}>
+          <View style={styles.statusBadge}>
+            <View style={styles.greenDot} />
+            <Text style={styles.statusText}>Searching for peer signal...</Text>
+          </View>
+        </Animated.View>
+
+        {/* Simulation scan button */}
+        <TouchableOpacity
+          style={styles.simulateButton}
+          onPress={handleSimulateScan}
+          activeOpacity={0.8}
+        >
+          <Feather name="check-circle" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+          <Text style={styles.simulateText}>Simulate Scan Connection</Text>
         </TouchableOpacity>
       </View>
+    ) : (
+      <View style={styles.codeContainer}>
+        <Text style={styles.instructions}>Show this code to another user to share your Mesh credentials</Text>
 
-      {/* Scanner Screen Content */}
-      {activeMode === 'scan' ? (
-        <View style={styles.scanContainer}>
-          <Text style={styles.instructions}>Align QR Code inside the scanner frame to link peer</Text>
-          
-          {/* Viewfinder area */}
-          <View style={styles.viewfinderContainer}>
-            {/* Viewfinder background simulator (simulating camera with grid and nodes) */}
-            <View style={styles.cameraSimulator}>
-              <Svg width="100%" height="100%" viewBox="0 0 200 200">
-                {/* Tactical grid background inside camera view */}
-                <Path d="M 0 50 L 200 50 M 0 100 L 200 100 M 0 150 L 200 150 M 50 0 L 50 200 M 100 0 L 100 200 M 150 0 L 150 200" stroke="rgba(29, 78, 216, 0.1)" strokeWidth="1" />
-                <Circle cx="100" cy="100" r="10" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="1.5" fill="none" />
-                <Circle cx="100" cy="100" r="40" stroke="rgba(29, 78, 216, 0.15)" strokeWidth="1" fill="none" />
-              </Svg>
-            </View>
+        {/* QR Code Card */}
+        <View style={styles.qrCard}>
+          <Text style={styles.qrHeader}>MESH NETWORK ID</Text>
 
-            {/* Neon scanner brackets */}
-            <View style={styles.viewfinderFrame}>
-              {/* Top Left Bracket */}
-              <View style={[styles.bracket, styles.topLeftBracket]} />
-              {/* Top Right Bracket */}
-              <View style={[styles.bracket, styles.topRightBracket]} />
-              {/* Bottom Left Bracket */}
-              <View style={[styles.bracket, styles.bottomLeftBracket]} />
-              {/* Bottom Right Bracket */}
-              <View style={[styles.bracket, styles.bottomRightBracket]} />
-
-              {/* Laser sweep line */}
-              <Animated.View
-                style={[
-                  styles.laserLine,
-                  {
-                    transform: [
-                      {
-                        translateY: laserAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, SCAN_SIZE - 2],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-            </View>
+          {/* Real QR Code Generator */}
+          <View style={styles.qrWrapper}>
+            <QRCode
+              value={JSON.stringify({
+                name: 'My Device',
+                id: 'NODE_MESH_V4.2',
+                ip: '192.168.4.1'
+              })}
+              size={180}
+              color="#080d19"
+              backgroundColor="#ffffff"
+            />
           </View>
 
-          {/* Pulse scanning text */}
-          <Animated.View style={{ opacity: pulseAnim, marginTop: 24, alignItems: 'center' }}>
-            <View style={styles.statusBadge}>
-              <View style={styles.greenDot} />
-              <Text style={styles.statusText}>Searching for peer signal...</Text>
-            </View>
-          </Animated.View>
-
-          {/* Simulation scan button */}
-          <TouchableOpacity
-            style={styles.simulateButton}
-            onPress={handleSimulateScan}
-            activeOpacity={0.8}
-          >
-            <Feather name="check-circle" size={18} color="#ffffff" style={{ marginRight: 8 }} />
-            <Text style={styles.simulateText}>Simulate Scan Connection</Text>
-          </TouchableOpacity>
+          <Text style={styles.qrUser}>My Device (You)</Text>
+          <Text style={styles.qrId}>NODE_MESH_V4.2</Text>
+          <Text style={styles.qrIp}>192.168.4.1</Text>
         </View>
-      ) : (
-        <View style={styles.codeContainer}>
-          <Text style={styles.instructions}>Show this code to another user to share your Mesh credentials</Text>
-
-          {/* QR Code Card */}
-          <View style={styles.qrCard}>
-            <Text style={styles.qrHeader}>MESH NETWORK ID</Text>
-
-            {/* Real QR Code Generator */}
-            <View style={styles.qrWrapper}>
-              <QRCode
-                value={JSON.stringify({
-                  name: 'My Device',
-                  id: 'NODE_MESH_V4.2',
-                  ip: '192.168.4.1'
-                })}
-                size={180}
-                color="#080d19"
-                backgroundColor="#ffffff"
-              />
-            </View>
-
-            <Text style={styles.qrUser}>My Device (You)</Text>
-            <Text style={styles.qrId}>NODE_MESH_V4.2</Text>
-            <Text style={styles.qrIp}>192.168.4.1</Text>
-          </View>
-        </View>
-      )}
-    </View>
+      </View>
+    )
+  }
+    </View >
   );
 }
 

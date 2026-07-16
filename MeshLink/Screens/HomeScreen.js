@@ -425,7 +425,7 @@ export default function HomeScreen({
                 onPressConnect();
               }}
             >
-              <Feather name="qr-code" size={16} color="#ffffff" style={{ marginRight: 8 }} />
+              <MaterialCommunityIcons name="qrcode" size={18} color="#ffffff" style={{ marginRight: 8 }} />
               <Text style={styles.scanCodeModalButtonText}>Scan QR Code to Add Node</Text>
             </TouchableOpacity>
 

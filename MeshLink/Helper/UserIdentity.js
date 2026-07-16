@@ -43,6 +43,20 @@ export async function setPin(pin) {
   await SecureStore.setItemAsync(PIN_KEY, pin);
 }
 
+const PHOTO_URI_KEY = 'meshlink_photo_uri';
+
+export async function getProfilePhoto() {
+  return await SecureStore.getItemAsync(PHOTO_URI_KEY);
+}
+
+export async function setProfilePhoto(uri) {
+  if (uri) {
+    await SecureStore.setItemAsync(PHOTO_URI_KEY, uri);
+  } else {
+    await SecureStore.deleteItemAsync(PHOTO_URI_KEY);
+  }
+}
+
 export async function isSignedUp() {
   const pin = await getPin();
   const name = await SecureStore.getItemAsync(DISPLAY_NAME_KEY);

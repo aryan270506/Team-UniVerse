@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,53 +11,23 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
-import { setStoredPin } from '../Helper/UserIdentity';
-
-// ─── Fake QR Code ─────────────────────────────────────────────────────────────
-const QRCodePlaceholder = () => {
-  const pattern = [
-    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,1],
-    [1,0,1,1,1,0,1,0,1,0,1,0,1,1,1,0,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,1,1,1,0,1],
-    [1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,0,1],
-    [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
-    [1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1],
-    [0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0],
-    [1,0,1,1,0,1,1,1,0,1,1,0,1,1,0,1,0],
-    [0,1,0,0,1,0,0,0,1,0,0,1,0,0,1,0,1],
-    [1,1,0,1,0,1,1,1,0,1,0,1,0,1,0,1,1],
-    [0,0,0,0,0,0,0,0,1,0,1,1,0,0,1,0,1],
-    [1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,1,0],
-    [1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,0,1],
-    [1,0,1,1,1,0,1,0,0,1,1,0,1,1,0,1,1],
-    [1,0,0,0,0,0,1,0,1,0,0,1,0,0,1,0,0],
-    [1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,0,1],
-  ];
-  return (
-    <View style={qrStyles.wrap}>
-      {pattern.map((row, r) => (
-        <View key={r} style={qrStyles.row}>
-          {row.map((cell, c) => (
-            <View key={c} style={[qrStyles.cell, cell === 1 ? qrStyles.dark : qrStyles.light]} />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-};
-
-const qrStyles = StyleSheet.create({
-  wrap: { backgroundColor: '#ffffff', padding: 10, borderRadius: 8 },
-  row: { flexDirection: 'row' },
-  cell: { width: 10, height: 10 },
-  dark: { backgroundColor: '#0f172a' },
-  light: { backgroundColor: '#ffffff' },
-});
+import * as Battery from 'expo-battery';
+import QRCode from 'react-native-qrcode-svg';
+import {
+  getDisplayName,
+  setDisplayName as saveDisplayName,
+  getPin,
+  setPin,
+  getOrCreateDeviceId,
+  getProfilePhoto,
+  setProfilePhoto,
+  resetIdentity,
+} from '../Helper/UserIdentity';
 
 // ─── Setting Row ──────────────────────────────────────────────────────────────
 const SettingRow = ({ icon, label, onPress, danger = false, subLabel = null, rightIcon = 'chevron-right' }) => (
@@ -76,8 +46,8 @@ const SettingRow = ({ icon, label, onPress, danger = false, subLabel = null, rig
 );
 
 // ─── PIN Keypad ───────────────────────────────────────────────────────────────
-const PIN_KEYS = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
-const PinKeypad = ({ pin, onKey }) => (
+const PIN_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
+const PinKeypad = ({ onKey }) => (
   <View style={pinStyles.keypad}>
     {PIN_KEYS.map((k, i) => (
       <TouchableOpacity
@@ -109,13 +79,49 @@ const pinStyles = StyleSheet.create({
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavigateToProfile }) {
-  const [displayName, setDisplayName] = useState('Alex Rivera');
-  const [profilePhoto, setProfilePhoto] = useState(null);
-  const meshNodesCount = 12;
-  const syncHealth = 98;
+export default function ProfileScreen({ peers = [], onNavigateToNetwork, navigation }) {
+  const [displayName, setDisplayName] = useState('');
+  const [deviceId, setDeviceId] = useState('');
+  const [profilePhoto, setProfilePhotoState] = useState(null);
+  const [batteryLevel, setBatteryLevel] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // ── Pick photo from library ──
+  // ── Load all data on mount ──
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [name, id, photo, battery] = await Promise.all([
+          getDisplayName(),
+          getOrCreateDeviceId(),
+          getProfilePhoto(),
+          Battery.getBatteryLevelAsync(),
+        ]);
+        setDisplayName(name);
+        setDeviceId(id);
+        if (photo) setProfilePhotoState(photo);
+        setBatteryLevel(battery);
+      } catch (e) {
+        console.error('ProfileScreen load error:', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+
+    // Subscribe to battery level changes
+    const subscription = Battery.addBatteryLevelListener(({ batteryLevel: level }) => {
+      setBatteryLevel(level);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const batteryPercent = batteryLevel !== null ? Math.round(batteryLevel * 100) : null;
+  const batteryColor = batteryPercent === null ? '#9EB1FF'
+    : batteryPercent > 50 ? '#10b981'
+      : batteryPercent > 20 ? '#f59e0b'
+        : '#ef4444';
+
+  // ── Pick photo from library and persist ──
   const pickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -129,7 +135,13 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
-      setProfilePhoto(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setProfilePhotoState(uri);
+      try {
+        await setProfilePhoto(uri);
+      } catch (e) {
+        console.error('Failed to save photo URI', e);
+      }
     }
   };
 
@@ -141,20 +153,26 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
     setNameInput(displayName);
     setNameModalVisible(true);
   };
-  const saveName = () => {
+  const saveName = async () => {
     if (!nameInput.trim()) {
       Alert.alert('Invalid Name', 'Display name cannot be empty.');
       return;
     }
-    setDisplayName(nameInput.trim());
-    setNameModalVisible(false);
+    try {
+      await saveDisplayName(nameInput.trim());
+      setDisplayName(nameInput.trim());
+      setNameModalVisible(false);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save display name.');
+    }
   };
 
-  // ── Change PIN modal ──
+  // ── Change PIN modal (6 digits) ──
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinStep, setPinStep] = useState('new'); // 'new' | 'confirm'
   const [newPinInput, setNewPinInput] = useState('');
   const [confirmPinInput, setConfirmPinInput] = useState('');
+  const PIN_DIGIT_COUNT = 6;
 
   const openPinModal = () => {
     setPinStep('new');
@@ -164,26 +182,24 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
   };
 
   const handlePinKey = (k) => {
-    const setter = pinStep === 'new' ? setNewPinInput : setConfirmPinInput;
     const getter = pinStep === 'new' ? newPinInput : confirmPinInput;
+    const setter = pinStep === 'new' ? setNewPinInput : setConfirmPinInput;
 
     if (k === '⌫') {
       setter(getter.slice(0, -1));
       return;
     }
-    if (getter.length >= 4) return;
+    if (getter.length >= PIN_DIGIT_COUNT) return;
     const next = getter + k;
     setter(next);
 
-    if (next.length === 4) {
+    if (next.length === PIN_DIGIT_COUNT) {
       setTimeout(() => {
         if (pinStep === 'new') {
           setPinStep('confirm');
           setNewPinInput(next);
         } else {
-          if (next === newPinInput) {
-            Alert.alert('PINs match', 'Tap Confirm and Save to finish updating your PIN.');
-          } else {
+          if (next !== newPinInput) {
             Alert.alert('Mismatch', 'PINs do not match. Please try again.');
             setConfirmPinInput('');
           }
@@ -192,44 +208,72 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
     }
   };
 
-  const handleSavePin = () => {
-    if (confirmPinInput !== newPinInput || confirmPinInput.length !== 4) {
+  const handleSavePin = async () => {
+    if (confirmPinInput !== newPinInput || confirmPinInput.length !== PIN_DIGIT_COUNT) {
       Alert.alert('Mismatch', 'PINs do not match. Please try again.');
       return;
     }
-
-    setStoredPin(confirmPinInput).then(() => {
+    try {
+      await setPin(confirmPinInput);
       setPinModalVisible(false);
-      onNavigateToProfile && onNavigateToProfile();
-      Alert.alert('PIN Changed', 'Your new PIN has been saved successfully.');
-    });
+      Alert.alert('PIN Changed', 'Your new 6-digit PIN has been saved successfully.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save PIN.');
+    }
   };
 
-  const pinStepLabel = pinStep === 'new' ? 'Enter New PIN' : 'Confirm New PIN';
   const pinActive = pinStep === 'new' ? newPinInput : confirmPinInput;
-  const pinReadyToSave = pinStep === 'confirm' && confirmPinInput.length === 4 && confirmPinInput === newPinInput;
+  const pinReadyToSave = pinStep === 'confirm' && confirmPinInput.length === PIN_DIGIT_COUNT && confirmPinInput === newPinInput;
+  const pinStepLabel = pinStep === 'new' ? 'Enter New PIN' : 'Confirm New PIN';
   const pinStepSubtitle = pinStep === 'new'
-    ? 'Choose a new 4-digit PIN.'
-    : 'Re-enter the same PIN to verify it before saving.';
+    ? 'Choose a new 6-digit PIN.'
+    : 'Re-enter the same PIN to verify before saving.';
 
   // ── About modal ──
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
 
-  // ── Regenerate ──
+  // ── Regenerate identity ──
   const handleRegenerateIdentity = () => {
     Alert.alert(
       '⚠️ Regenerate Identity',
-      'This will permanently destroy your current node identity and cryptographic keys. All verified peer connections will be invalidated.\n\nThis action is IRREVERSIBLE.',
+      'This will permanently delete your node name, PIN, device ID and profile photo.\n\nYou will be taken to the Sign Up screen to create a new identity.\n\nThis action is IRREVERSIBLE.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Regenerate',
+          text: 'Delete & Regenerate',
           style: 'destructive',
-          onPress: () => Alert.alert('Identity Regenerated', 'Your new mesh identity has been created.'),
+          onPress: async () => {
+            try {
+              await resetIdentity();
+              await setProfilePhoto(null);
+              Alert.alert(
+                'Identity Deleted',
+                'Your node identity has been permanently erased.',
+                [{
+                  text: 'OK',
+                  onPress: () => {
+                    if (navigation) {
+                      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+                    }
+                  },
+                }]
+              );
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete identity. Please try again.');
+            }
+          },
         },
       ]
     );
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#3F7FFF" />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -261,10 +305,17 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
               <MaterialCommunityIcons name="camera" size={12} color="#fff" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{displayName}</Text>
+          <Text style={styles.userName}>{displayName || 'Unnamed Device'}</Text>
           <View style={styles.statusRow}>
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>RELAY ACTIVE</Text>
+          </View>
+          {/* Device ID chip */}
+          <View style={styles.deviceIdChip}>
+            <MaterialCommunityIcons name="identifier" size={13} color="#9EB1FF" style={{ marginRight: 5 }} />
+            <Text style={styles.deviceIdText} numberOfLines={1} ellipsizeMode="middle">
+              {deviceId || '—'}
+            </Text>
           </View>
         </View>
 
@@ -287,16 +338,25 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
         {/* QR / Identity Key */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardLabel}>IDENTITY KEY</Text>
+            <Text style={styles.cardLabel}>IDENTITY KEY — SCAN TO ADD PEER</Text>
             <TouchableOpacity activeOpacity={0.7}>
               <MaterialCommunityIcons name="cog-outline" size={20} color="#475569" />
             </TouchableOpacity>
           </View>
           <View style={styles.qrContainer}>
-            <QRCodePlaceholder />
+            {deviceId ? (
+              <QRCode
+                value={JSON.stringify({ meshlink: true, deviceId, displayName })}
+                size={180}
+                color="#0f172a"
+                backgroundColor="#ffffff"
+              />
+            ) : (
+              <ActivityIndicator color="#3F7FFF" size="small" />
+            )}
           </View>
           <Text style={styles.qrHint}>
-            Scan this code with another MeshLink device to establish a verified peer-to-peer connection.
+            Scan this QR code with another MeshLink device to establish a verified peer-to-peer connection.
           </Text>
         </View>
 
@@ -328,19 +388,28 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
             rightIcon="open-in-new"
           />
           <View style={styles.divider} />
-          
+          <SettingRow
+            icon="refresh"
+            label="Regenerate Identity"
+            onPress={handleRegenerateIdentity}
+            danger
+            subLabel="⚠ Irreversible"
+          />
         </View>
 
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Mesh Nodes</Text>
-            <Text style={styles.statValue}>{meshNodesCount}</Text>
+            <Text style={styles.statValue}>{peers.length}</Text>
           </View>
           <View style={styles.statDivider} />
+
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Sync Health</Text>
-            <Text style={[styles.statValue, { color: '#10b981' }]}>{syncHealth}%</Text>
+            <Text style={styles.statLabel}>Battery</Text>
+            <Text style={[styles.statValue, { color: batteryColor }]}>
+              {batteryPercent !== null ? `${batteryPercent}%` : '—'}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -374,7 +443,7 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ══ Change PIN Modal ══ */}
+      {/* ══ Change PIN Modal (6-digit) ══ */}
       <Modal visible={pinModalVisible} transparent animationType="slide" onRequestClose={() => setPinModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { paddingBottom: 32 }]}>
@@ -382,9 +451,9 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
             <Text style={styles.modalTitle}>{pinStepLabel}</Text>
             <Text style={styles.modalSubtitle}>{pinStepSubtitle}</Text>
 
-            {/* PIN dots */}
+            {/* PIN dots — 6 */}
             <View style={styles.pinDotsRow}>
-              {[0, 1, 2, 3].map(i => (
+              {Array.from({ length: PIN_DIGIT_COUNT }).map((_, i) => (
                 <View key={i} style={[styles.pinDot, i < pinActive.length && styles.pinDotFilled]} />
               ))}
             </View>
@@ -403,16 +472,13 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
               </View>
             )}
 
-            <PinKeypad pin={pinActive} onKey={handlePinKey} />
+            <PinKeypad onKey={handlePinKey} />
 
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleSavePin}
               disabled={!pinReadyToSave}
-              style={[
-                styles.modalBtnPrimary,
-                { marginTop: 20, opacity: pinReadyToSave ? 1 : 0.45 },
-              ]}
+              style={[styles.modalBtnPrimary, { marginTop: 20, opacity: pinReadyToSave ? 1 : 0.45 }]}
             >
               <Text style={styles.modalBtnPrimaryText}>Confirm and Save</Text>
             </TouchableOpacity>
@@ -430,7 +496,6 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
           <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
             <View style={styles.modalHandle} />
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Header */}
               <View style={styles.aboutHeader}>
                 <View style={styles.aboutLogo}>
                   <MaterialCommunityIcons name="hub" size={32} color="#4A78FF" />
@@ -462,7 +527,7 @@ export default function ProfileScreen({ peers = [], onNavigateToNetwork, onNavig
 
               <Text style={styles.aboutSectionTitle}>PROJECT INFO</Text>
               <Text style={styles.aboutBody}>
-                Built by Team UniVerse as part of a collaborative open-source initiative. MeshLink is designed to empower communities with resilient, privacy-first communication tools.{'\n\n'}
+                Built by Team UniVerse as part of a collaborative open-source initiative.{'\n\n'}
                 🔗 GitHub: github.com/aryan270506/Team-UniVerse{'\n'}
                 📡 Protocol: Bluetooth LE + Wi-Fi Direct{'\n'}
                 🔐 Encryption: AES-256 + ECDH Key Exchange
@@ -504,7 +569,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(63,127,255,0.12)',
     borderWidth: 2, borderColor: 'rgba(63,127,255,0.35)',
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
   editBadge: {
     position: 'absolute', bottom: 2, right: 2,
     width: 26, height: 26, borderRadius: 13,
@@ -516,13 +583,20 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' },
   statusText: { color: '#10b981', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
+  deviceIdChip: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: 'rgba(26,36,64,0.85)',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6,
+    borderWidth: 1, borderColor: 'rgba(201,212,255,0.12)',
+    maxWidth: 300,
+  },
+  deviceIdText: { color: '#9EB1FF', fontSize: 11, letterSpacing: 0.3, flex: 1 },
 
   notificationWrap: { marginHorizontal: 16, marginBottom: 18 },
   notificationGlass: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 18, overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   notificationGlow: {
@@ -530,21 +604,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(63,127,255,0.10)',
   },
   notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
   notificationIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(63,127,255,0.28)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
   },
   notificationTitle: { color: '#ffffff', fontSize: 14, fontWeight: '700', marginBottom: 2 },
   notificationText: { color: '#c9d4ff', fontSize: 12, lineHeight: 18 },
@@ -555,11 +622,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', marginBottom: 24,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  cardLabel: { color: '#9EB1FF', fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
+  cardLabel: { color: '#9EB1FF', fontSize: 11, fontWeight: '700', letterSpacing: 1.3, flex: 1 },
   qrContainer: {
     alignItems: 'center', marginBottom: 16,
     borderWidth: 2, borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10, padding: 10,
+    borderRadius: 10, padding: 14,
     backgroundColor: '#fff', alignSelf: 'center',
   },
   qrHint: { color: '#9EB1FF', fontSize: 13, textAlign: 'center', lineHeight: 20 },
@@ -596,9 +663,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
     overflow: 'hidden', marginBottom: 12,
   },
-  statBox: { flex: 1, paddingVertical: 18, paddingHorizontal: 20 },
-  statLabel: { color: '#9EB1FF', fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  statValue: { color: '#C9D4FF', fontSize: 26, fontWeight: '700' },
+  statBox: { flex: 1, paddingVertical: 18, paddingHorizontal: 14 },
+  statLabel: { color: '#9EB1FF', fontSize: 11, fontWeight: '600', marginBottom: 4 },
+  statValue: { color: '#C9D4FF', fontSize: 22, fontWeight: '700' },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginVertical: 14 },
 
   // ── Modals ──
@@ -642,19 +709,16 @@ const styles = StyleSheet.create({
   modalBtnSecondaryText: { color: '#9EB1FF', fontWeight: '700', fontSize: 15 },
 
   // PIN dots
-  pinDotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginVertical: 24 },
+  pinDotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginVertical: 24 },
   pinDot: {
-    width: 18, height: 18, borderRadius: 9,
+    width: 16, height: 16, borderRadius: 8,
     borderWidth: 2, borderColor: 'rgba(158,177,255,0.45)',
     backgroundColor: 'transparent',
   },
   pinDotFilled: { backgroundColor: '#4A78FF', borderColor: '#4A78FF' },
   pinMatchNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -8,
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', marginTop: -8, marginBottom: 10,
   },
   pinMatchText: { color: '#9EB1FF', fontSize: 13, fontWeight: '600' },
   pinMatchTextReady: { color: '#34d399' },
