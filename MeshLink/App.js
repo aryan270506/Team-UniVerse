@@ -16,9 +16,9 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { isSignedUp, getDisplayName, getOrCreateDeviceId } from './Helper/UserIdentity';
+import { isSignedUp, getDisplayName, getOrCreateDeviceId, getProfilePhoto } from './Helper/UserIdentity';
 import { requestNearbyPermissions, isNearbyPermissionResultGranted, checkLocationServicesEnabled } from './Helper/Permission';
-import { initDb, getAllPeers, saveMessage, upsertPeer, setPeerConnected, getMessagesWithPeer } from './storage/db';
+import { initDb, getAllPeers, saveMessage, upsertPeer, setPeerConnected, getMessagesWithPeer, deletePeerAndMessages } from './storage/db';
 import { normalizePeer } from './services/mesh/peerRegistry';
 import { createHandshakeEnvelope, createMessageEnvelope, parseEnvelope } from './services/mesh/messageEnvelope';
 import {
@@ -392,7 +392,7 @@ export default function App() {
         });
 
         // 3. Connection Established Successfully
-        subConnected = onPeerConnected((event) => {
+        subConnected = onPeerConnected(async (event) => {
           const { endpointId, displayName: connectedName } = event || {};
           if (!endpointId) return;
 
@@ -404,11 +404,14 @@ export default function App() {
             added: true,
           });
 
+          const currentPhoto = await getProfilePhoto();
+
           // Send handshake envelope to exchange permanent device IDs
           const handshake = createHandshakeEnvelope({
             senderId: id,
             senderName: name,
             recipientId: endpointId,
+            profilePhoto: currentPhoto,
           });
           sendMessage(endpointId, handshake);
         });
@@ -454,21 +457,39 @@ export default function App() {
 
             // Handle P2P Handshake Message (Identity Mapping)
             if (parsed?.type === 'handshake') {
-              const nextDisplayName = parsed?.payload?.displayName || parsed?.displayName || peer?.displayName || 'Nearby Device';
-              const nextDeviceId = parsed?.payload?.deviceId || parsed?.deviceId || peer?.deviceId || endpointId;
+              let parsedPayload = {};
+              if (parsed?.payload) {
+                try {
+                  parsedPayload = typeof parsed.payload === 'string' ? JSON.parse(parsed.payload) : parsed.payload;
+                } catch (e) {
+                  parsedPayload = {};
+                }
+              }
+
+              const nextDisplayName = parsedPayload?.displayName || parsed?.senderName || peer?.displayName || 'Nearby Device';
+              const nextDeviceId = parsedPayload?.deviceId || parsed?.senderId || peer?.deviceId || endpointId;
+              const nextProfilePhoto = parsedPayload?.profilePhoto || parsed?.profilePhoto || peer?.profilePhoto || null;
+
+              // Find where the stored/permanent peer is
+              const permIndex = currentPeers.findIndex((p) => p.deviceId === nextDeviceId || p.id === nextDeviceId);
+              // Find where the temporary endpoint peer is
+              const tempIndex = currentPeers.findIndex((p) => p.endpointId === endpointId && p.deviceId !== nextDeviceId);
+
+              const basePeer = permIndex >= 0 ? currentPeers[permIndex] : (tempIndex >= 0 ? currentPeers[tempIndex] : {});
 
               const updatedPeer = normalizePeer({
-                ...(peer || {}),
-                id: peerKey,
+                ...basePeer,
+                id: nextDeviceId, // Use permanent deviceId as primary key
                 deviceId: nextDeviceId,
                 endpointId,
                 displayName: nextDisplayName,
                 name: nextDisplayName,
                 connected: true,
-                status: 'Connected • Handshake complete',
+                status: 'Online',
                 connectionState: 'connected',
                 avatarStatusColor: '#10b981',
-                added: true,
+                added: basePeer.added ?? true,
+                profilePhoto: nextProfilePhoto,
               });
 
               // Save the peer to local SQLite DB
@@ -478,23 +499,48 @@ export default function App() {
                 endpointId,
                 lastSeen: Date.now(),
                 connected: true,
+                profilePhoto: nextProfilePhoto,
               });
 
-              if (peerIndex >= 0) {
-                const nextPeers = [...currentPeers];
-                nextPeers[peerIndex] = updatedPeer;
-                return nextPeers;
+              let nextPeers = [...currentPeers];
+              
+              if (permIndex >= 0) {
+                // Update the permanent peer
+                nextPeers[permIndex] = updatedPeer;
+                // If there's a temporary peer, remove it to prevent duplicates
+                if (tempIndex >= 0) {
+                  nextPeers = nextPeers.filter((_, idx) => idx !== tempIndex);
+                }
+              } else if (tempIndex >= 0) {
+                // Upgrade temporary peer to permanent peer
+                nextPeers[tempIndex] = updatedPeer;
+              } else {
+                // Add as new peer
+                nextPeers.push(updatedPeer);
               }
 
-              return [...currentPeers, updatedPeer];
+              return nextPeers;
             }
 
             // Handle Normal Chat Message
+            let msgText = '';
+            let msgAttachment = null;
+            if (parsed?.payload) {
+              try {
+                const parsedPayload = typeof parsed.payload === 'string' ? JSON.parse(parsed.payload) : parsed.payload;
+                msgText = parsedPayload.text || '';
+                msgAttachment = parsedPayload;
+              } catch (e) {
+                msgText = String(parsed.payload);
+              }
+            }
+
             const messageEnvelope = {
               id: parsed?.id || String(Date.now()),
               sender: 'peer',
-              text: parsed?.text || parsed?.payload?.text || '',
+              text: msgText || parsed?.text || '',
               time: nowTime,
+              ...msgAttachment,
               ...parsed,
             };
 
@@ -512,7 +558,7 @@ export default function App() {
               recipientId: myDeviceId || 'LOCAL',
               senderName: peer?.displayName || peer?.name || 'Nearby Device',
               type: parsed?.type || 'chat',
-              payload: JSON.stringify(parsed || { text: messageEnvelope.text }),
+              payload: JSON.stringify({ text: messageEnvelope.text, ...msgAttachment }),
               timestamp: Date.now(),
               ttl: 5,
               delivered: true,
@@ -587,11 +633,20 @@ export default function App() {
   const handleDeleteChat = (peerName) => {
     const resolvedPeer = typeof peerName === 'string' ? peers.find((peer) => peer.id === peerName || peer.name === peerName || peer.displayName === peerName) : peerName;
     const peerKey = resolvedPeer?.id || peerName;
+    const deviceId = resolvedPeer?.deviceId || peerKey;
 
-    setChatSessions((prev) => ({
-      ...prev,
-      [peerKey]: []
-    }));
+    setChatSessions((prev) => {
+      const next = { ...prev };
+      delete next[peerKey];
+      if (deviceId) delete next[deviceId];
+      return next;
+    });
+
+    setPeers((prev) => prev.filter((p) => p.id !== peerKey && p.deviceId !== deviceId && p.endpointId !== peerKey));
+
+    if (deviceId) {
+      deletePeerAndMessages(deviceId);
+    }
   };
 
   const handleSendChatMessage = (peerKey, text, attachment = null) => {
@@ -666,21 +721,23 @@ export default function App() {
     }
 
     // Load active chat logs from database
-    if (peer.endpointId && myDeviceId) {
-      const existingMessages = getMessagesWithPeer(myDeviceId, peer.deviceId || peer.endpointId).map((row) => ({
-        id: row.id,
-        sender: row.senderId === myDeviceId ? 'me' : 'peer',
-        text: (() => {
-          try {
-            const parsed = JSON.parse(row.payload || '{}');
-            return parsed.text || '';
-          } catch (e) {
-            return row.payload || '';
-          }
-        })(),
-        time: new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: row.delivered ? 'Delivered' : 'Pending',
-      }));
+    if (peer.deviceId && myDeviceId) {
+      const existingMessages = getMessagesWithPeer(myDeviceId, peer.deviceId).map((row) => {
+        let payloadObj = {};
+        try {
+          payloadObj = JSON.parse(row.payload || '{}');
+        } catch (e) {
+          payloadObj = { text: row.payload || '' };
+        }
+        return {
+          id: row.id,
+          sender: row.senderId === myDeviceId ? 'me' : 'peer',
+          text: payloadObj.text || '',
+          time: new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: row.delivered ? 'Delivered' : 'Pending',
+          ...payloadObj,
+        };
+      });
 
       setChatSessions((prev) => ({
         ...prev,
@@ -705,6 +762,15 @@ export default function App() {
       primary: '#1d4ed8',
     },
   };
+
+  const otherPeers = peers.filter(
+    (peer) =>
+      peer.id !== myDeviceId &&
+      peer.deviceId !== myDeviceId &&
+      peer.endpointId !== myDeviceId &&
+      peer.name !== myDisplayName &&
+      peer.displayName !== myDisplayName
+  );
 
   if (loading) {
     return (
@@ -739,7 +805,7 @@ export default function App() {
               {(props) => (
                 <MainTabsScreen
                   {...props}
-                  peers={peers}
+                  peers={otherPeers}
                   activeTab={activeTab}
                   setActiveTab={setActiveTab}
                   handleAddPeer={handleAddPeer}
@@ -760,6 +826,7 @@ export default function App() {
                     {...props}
                     peerName={peerName || peer?.displayName || peer?.name || 'Nearby Device'}
                     peerKey={peer?.id || peerKey}
+                    peerPhoto={peer?.profilePhoto}
                     connectionState={peer?.connectionState}
                     messages={chatSessions[peer?.id || peerKey] || []}
                     onSendMessage={(text, attachment) => handleSendChatMessage(peer?.id || peerKey, text, attachment)}
@@ -779,7 +846,7 @@ export default function App() {
               {(props) => (
                 <SOSScreen
                   {...props}
-                  peers={peers}
+                  peers={otherPeers}
                   onStopBroadcasting={() => props.navigation.goBack()}
                   onSelectPeerOptions={(peer) => {
                     setSelectedPeerOptions(peer);
@@ -792,7 +859,7 @@ export default function App() {
               {(props) => (
                 <MapScreen
                   {...props}
-                  peers={peers}
+                  peers={otherPeers}
                   onBack={() => props.navigation.goBack()}
                 />
               )}

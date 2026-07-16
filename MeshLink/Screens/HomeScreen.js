@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
   Alert,
+  Image,
   StatusBar as RNStatusBar
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -214,7 +215,11 @@ export default function HomeScreen({
             >
               <View style={styles.avatarContainer}>
                 <View style={styles.avatar}>
-                  <Feather name="image" size={18} color="#4f46e5" />
+                  {peer.profilePhoto ? (
+                    <Image source={{ uri: peer.profilePhoto }} style={styles.avatarImage} />
+                  ) : (
+                    <Feather name="image" size={18} color="#4f46e5" />
+                  )}
                 </View>
                 <View style={[styles.avatarStatus, { backgroundColor: peer.avatarStatusColor }]} />
               </View>
@@ -595,6 +600,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c2843',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   avatarStatus: {
     position: 'absolute',

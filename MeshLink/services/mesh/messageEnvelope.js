@@ -16,7 +16,7 @@ export function createMessageEnvelope({ senderId, senderName, recipientId, type 
   };
 }
 
-export function createHandshakeEnvelope({ senderId, senderName, recipientId, appVersion = '1.0.0', capabilities = ['chat'] }) {
+export function createHandshakeEnvelope({ senderId, senderName, recipientId, profilePhoto = null, appVersion = '1.0.0', capabilities = ['chat'] }) {
   return createMessageEnvelope({
     senderId,
     senderName,
@@ -25,6 +25,7 @@ export function createHandshakeEnvelope({ senderId, senderName, recipientId, app
     payload: {
       deviceId: senderId,
       displayName: senderName,
+      profilePhoto,
       appVersion,
       platform: Platform.OS,
       capabilities,
