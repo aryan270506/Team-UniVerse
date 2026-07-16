@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop, Text as SvgText, G } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedSvgText = Animated.createAnimatedComponent(SvgText);
@@ -267,39 +267,47 @@ export default function HomeScreen({
               <Line x1="0" y1="110" x2="220" y2="110" stroke="rgba(29, 78, 216, 0.2)" strokeWidth="1.5" />
 
               {/* Faint Concentric Radar Rings */}
+              {/* Concentric Radar Rings */}
               <Circle cx="110" cy="110" r="22" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
               <Circle cx="110" cy="110" r="44" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
               <Circle cx="110" cy="110" r="66" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
               <Circle cx="110" cy="110" r="88" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
               <Circle cx="110" cy="110" r="110" stroke="rgba(29, 78, 216, 0.3)" strokeWidth="1.5" fill="none" />
 
-              {/* Sarah Chen (Strong) - Signal Blue/Green */}
-              <AnimatedCircle cx="154" cy="65" r="8" fill="rgba(16, 185, 129, 0.25)" opacity={pingOpacitySarah} />
-              <AnimatedCircle cx="154" cy="65" r="4" fill="#10b981" opacity={pingOpacitySarah} />
-              <AnimatedSvgText x="164" y="68" fill="#10b981" fontSize="8" fontWeight="600" opacity={pingOpacitySarah} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
-                Sarah Chen
-              </AnimatedSvgText>
+              {/* Dynamic Discovered Peers Dots */}
+              {peers.map((peer, idx) => {
+                // Generate stable layout coordinates based on name string
+                let hash = 0;
+                const name = peer.name || 'Unknown';
+                for (let i = 0; i < name.length; i++) {
+                  hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const angle = Math.abs(hash % 360) * (Math.PI / 180);
+                const distance = 35 + (Math.abs(hash) % 65); // Keeps inside 110px radius
+                const cx = 110 + Math.cos(angle) * distance;
+                const cy = 110 + Math.sin(angle) * distance;
+                const color = peer.avatarStatusColor || '#10b981';
+                const isOffline = peer.status && peer.status.toLowerCase().includes('offline');
+                const opacityVal = isOffline ? 0.35 : 0.85;
 
-              {/* Marcus Thorne (Fair) - Amber */}
-              <AnimatedCircle cx="66" cy="88" r="8" fill="rgba(251, 191, 36, 0.25)" opacity={pingOpacityMarcus} />
-              <AnimatedCircle cx="66" cy="88" r="4" fill="#fbbf24" opacity={pingOpacityMarcus} />
-              <AnimatedSvgText x="56" y="91" fill="#fbbf24" fontSize="8" fontWeight="600" textAnchor="end" opacity={pingOpacityMarcus} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
-                Marcus Thorne
-              </AnimatedSvgText>
-
-              {/* Elena Rodriguez (Offline/Poor) - Gray/Offline */}
-              <AnimatedCircle cx="132" cy="176" r="8" fill="rgba(107, 114, 128, 0.25)" opacity={pingOpacityElena} />
-              <AnimatedCircle cx="132" cy="176" r="4" fill="#6b7280" opacity={pingOpacityElena} />
-              <AnimatedSvgText x="142" y="179" fill="#94a3b8" fontSize="8" fontWeight="600" opacity={pingOpacityElena} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
-                Elena Rodriguez
-              </AnimatedSvgText>
-
-              {/* Extra Unidentified Node (Amber) */}
-              <AnimatedCircle cx="60" cy="150" r="6" fill="rgba(59, 130, 246, 0.2)" opacity={pingOpacityExtra} />
-              <AnimatedCircle cx="60" cy="150" r="3" fill="#3b82f6" opacity={pingOpacityExtra} />
-              <AnimatedSvgText x="70" y="153" fill="#3b82f6" fontSize="7" fontWeight="600" opacity={pingOpacityExtra} fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}>
-                NODE 04
-              </AnimatedSvgText>
+                return (
+                  <G key={name + idx}>
+                    <AnimatedCircle cx={cx} cy={cy} r={8} fill={color} fillOpacity={0.25} opacity={opacityVal} />
+                    <AnimatedCircle cx={cx} cy={cy} r={4} fill={color} opacity={opacityVal} />
+                    <AnimatedSvgText 
+                      x={cx + 8} 
+                      y={cy + 3} 
+                      fill={color} 
+                      fontSize="8" 
+                      fontWeight="600" 
+                      opacity={opacityVal} 
+                      fontFamily={Platform.OS === 'ios' ? 'Courier New' : 'monospace'}
+                    >
+                      {name}
+                    </AnimatedSvgText>
+                  </G>
+                );
+              })}
             </Svg>
 
             {/* Sweep overlay (Rotated via Animated.View) */}
