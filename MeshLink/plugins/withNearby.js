@@ -64,12 +64,22 @@ function withNearby(config) {
           );
         }
 
-        // Add package to getPackages list
+        // Add package to getPackages list (compatible with older Expo versions)
         if (content.includes('val packages = PackageList(this).packages.toMutableList()')) {
           if (!content.includes('packages.add(NearbyPackage())')) {
             content = content.replace(
               /val packages = PackageList\(this\)\.packages\.toMutableList\(\)/,
               `val packages = PackageList(this).packages.toMutableList()\n      packages.add(NearbyPackage())`
+            );
+          }
+        }
+
+        // Add package to packages.apply block (compatible with Expo SDK 57+)
+        if (content.includes('PackageList(this).packages.apply {')) {
+          if (!content.includes('add(NearbyPackage())')) {
+            content = content.replace(
+              /PackageList\(this\)\.packages\.apply\s*\{/,
+              `PackageList(this).packages.apply {\n          add(NearbyPackage())`
             );
           }
         }
