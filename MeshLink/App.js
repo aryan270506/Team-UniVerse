@@ -112,6 +112,7 @@ function MainTabsScreen({
 
       {activeTab === 'Network' && (
         <NetworkScreen
+          peers={peers}
           onStartChat={onStartChat}
         />
       )}
