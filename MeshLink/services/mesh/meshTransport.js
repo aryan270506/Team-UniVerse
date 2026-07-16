@@ -12,6 +12,8 @@ import {
   onPeerDisconnected,
   onConnectionRejected,
   onPayloadReceived,
+  onTransportStatus,
+  onTransportError,
 } from '../../Helper/NearbyBridge';
 
 export function startTransport(displayName) {
@@ -49,4 +51,6 @@ export {
   onPeerDisconnected,
   onConnectionRejected,
   onPayloadReceived,
+  onTransportStatus,
+  onTransportError,
 };

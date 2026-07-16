@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["com.sekirohub.MeshLink.NearbyModule"]
+    "modules": ["com.sekirohub.nearbymodule.NearbyModule"]
   }
 }

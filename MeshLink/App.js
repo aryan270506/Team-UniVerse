@@ -6,6 +6,7 @@ import {
   Text,
   Modal,
   Platform,
+  Linking,
   Alert,
   ActivityIndicator,
   StatusBar as RNStatusBar
@@ -16,7 +17,7 @@ import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { isSignedUp, getDisplayName, getOrCreateDeviceId } from './Helper/UserIdentity';
-import { requestAllPermissions } from './Helper/Permission';
+import { requestNearbyPermissions, isNearbyPermissionResultGranted, checkLocationServicesEnabled } from './Helper/Permission';
 import { initDb, getAllPeers, saveMessage, upsertPeer, setPeerConnected, getMessagesWithPeer } from './storage/db';
 import { normalizePeer } from './services/mesh/peerRegistry';
 import { createHandshakeEnvelope, createMessageEnvelope, parseEnvelope } from './services/mesh/messageEnvelope';
@@ -34,6 +35,8 @@ import {
   onPeerDisconnected,
   onConnectionRejected,
   onPayloadReceived,
+  onTransportStatus,
+  onTransportError,
 } from './services/mesh/meshTransport';
 
 const Stack = createNativeStackNavigator();
@@ -196,11 +199,10 @@ export default function App() {
       try {
         initDb();
         const signedUp = await isSignedUp();
-        setIsUserSignedUp(signedUp);
         if (signedUp) {
           // Request Location/Bluetooth permissions on startup to ensure P2P works
           try {
-            await requestAllPermissions();
+            await requestNearbyPermissions();
           } catch (pe) {
             console.warn('Failed to request startup permissions:', pe);
           }
@@ -230,6 +232,7 @@ export default function App() {
 
           setPeers(storedPeers);
         }
+        setIsUserSignedUp(signedUp);
       } catch (e) {
         console.error('[MeshLink App] Failed to bootstrap app state:', e);
       } finally {
@@ -259,7 +262,7 @@ export default function App() {
   useEffect(() => {
     if (!isUserSignedUp) return;
 
-    let subDiscovered, subRequest, subConnected, subDisconnected, subRejected, subPayload;
+    let subDiscovered, subRequest, subConnected, subDisconnected, subRejected, subPayload, subTransportStatus, subTransportError;
 
     async function initMesh() {
       try {
@@ -268,8 +271,33 @@ export default function App() {
         setMyDisplayName(name);
         setMyDeviceId(id);
 
-        // Start scanning/advertising P2P node
-        startTransport(name);
+        const locationServicesEnabled = await checkLocationServicesEnabled();
+        if (!locationServicesEnabled) {
+          console.warn('[MeshLink P2P] Location services (GPS) are disabled; not starting transport.');
+          Alert.alert(
+            'Location Services Required',
+            'MeshLink uses peer-to-peer Wi-Fi and Bluetooth to connect offline, which requires Location services (GPS) to be turned ON. Please enable GPS and try again.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+
+        const nearbyPermissionResult = await requestNearbyPermissions();
+        if (!isNearbyPermissionResultGranted(nearbyPermissionResult)) {
+          console.warn('[MeshLink P2P] Nearby permissions are blocked; not starting transport.', nearbyPermissionResult);
+          Alert.alert(
+            'Nearby permission blocked',
+            'MeshLink needs Nearby devices permission to discover phones around you. Open app settings, allow Nearby devices, then reopen MeshLink on both phones.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
 
         const updatePeer = (endpointId, nextState) => {
           setPeers((currentPeers) => {
@@ -505,6 +533,17 @@ export default function App() {
           });
         });
 
+        subTransportStatus = onTransportStatus((event) => {
+          console.log('[MeshLink P2P] Transport status:', event);
+        });
+
+        subTransportError = onTransportError((event) => {
+          console.warn('[MeshLink P2P] Transport error:', event);
+        });
+
+        // Start scanning/advertising only after listeners are attached.
+        startTransport(name);
+
       } catch (e) {
         console.error('[MeshLink P2P] Failed to initialize P2P mesh network:', e);
       }
@@ -521,6 +560,8 @@ export default function App() {
         subDisconnected?.remove();
         subRejected?.remove();
         subPayload?.remove();
+        subTransportStatus?.remove();
+        subTransportError?.remove();
       } catch (e) {
         console.warn('Failed to clean up mesh node listeners:', e);
       }

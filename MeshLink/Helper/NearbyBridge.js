@@ -1,8 +1,12 @@
-import { requireNativeModule } from 'expo';
+import { requireNativeModule, EventEmitter } from 'expo';
 
 let NearbyModule = null;
+let nearbyEventEmitter = null;
 try {
   NearbyModule = requireNativeModule('NearbyModule');
+  if (NearbyModule) {
+    nearbyEventEmitter = new EventEmitter(NearbyModule);
+  }
 } catch (e) {
   console.log('[MeshLink P2P] NearbyModule is unavailable. Using simulator mode.');
 }
@@ -14,6 +18,8 @@ const simulatedListeners = {
   onPeerDisconnected: [],
   onConnectionRejected: [],
   onPayloadReceived: [],
+  onTransportStatus: [],
+  onTransportError: [],
 };
 
 const MOCK_PEERS = [];
@@ -22,7 +28,7 @@ let simulatorTimers = [];
 const simulatorConnections = new Set();
 
 function addListener(eventName, callback) {
-  if (!NearbyModule) {
+  if (!NearbyModule || !nearbyEventEmitter) {
     simulatedListeners[eventName].push(callback);
     return {
       remove: () => {
@@ -31,7 +37,7 @@ function addListener(eventName, callback) {
     };
   }
 
-  return NearbyModule.addListener(eventName, callback);
+  return nearbyEventEmitter.addListener(eventName, callback);
 }
 
 function emitSimulated(eventName, payload) {
@@ -41,14 +47,17 @@ function emitSimulated(eventName, payload) {
 export function startMeshNode(displayName) {
   if (!NearbyModule) {
     console.warn('[MeshLink P2P] Native module missing. Running P2P discovery in SIMULATOR mode.');
+    emitSimulated('onTransportStatus', { state: 'simulator', detail: 'Native NearbyModule unavailable' });
     return;
   }
 
   try {
+    console.log(`[MeshLink P2P] Starting Nearby transport as "${displayName || 'MeshLink'}"`);
     NearbyModule.startAdvertising(displayName);
     NearbyModule.startDiscovery();
   } catch (e) {
     console.error('[MeshLink P2P] Failed to start native mesh node:', e);
+    emitSimulated('onTransportError', { operation: 'startMeshNode', message: e.message || String(e) });
   }
 }
 
@@ -66,6 +75,7 @@ export function stopMeshNode() {
   try {
     NearbyModule.stopAdvertising?.();
     NearbyModule.stopDiscovery?.();
+    NearbyModule.stopAllEndpoints?.();
   } catch (e) {
     console.error('[MeshLink P2P] Failed to stop native mesh node:', e);
   }
@@ -198,6 +208,14 @@ export function onConnectionRejected(callback) {
 
 export function onPayloadReceived(callback) {
   return addListener('onPayloadReceived', callback);
+}
+
+export function onTransportStatus(callback) {
+  return addListener('onTransportStatus', callback);
+}
+
+export function onTransportError(callback) {
+  return addListener('onTransportError', callback);
 }
 
 // Backward-compatible aliases used by older screens and helpers.
