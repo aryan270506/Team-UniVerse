@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen({
   peerName,
+  peerPhoto,
   messages,
   onSendMessage,
   onBack,
@@ -50,11 +51,15 @@ export default function ChatScreen({
 
  
   useEffect(() => {
+    let timer;
     if (chatScrollRef.current) {
-      setTimeout(() => {
-        chatScrollRef.current.scrollToEnd({ animated: true });
+      timer = setTimeout(() => {
+        chatScrollRef.current?.scrollToEnd({ animated: true });
       }, 100);
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [messages]);
 
   const handleSend = () => {
@@ -175,7 +180,11 @@ export default function ChatScreen({
 
         <View style={styles.chatAvatarContainer}>
           <View style={styles.chatAvatar}>
-            <Feather name="image" size={16} color="#818cf8" />
+            {peerPhoto ? (
+              <Image source={{ uri: peerPhoto }} style={styles.avatarImage} />
+            ) : (
+              <Feather name="image" size={16} color="#818cf8" />
+            )}
           </View>
           <View style={styles.chatAvatarStatus} />
         </View>
@@ -470,6 +479,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c2843',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   chatAvatarStatus: {
     position: 'absolute',

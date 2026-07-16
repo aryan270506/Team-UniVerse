@@ -21,7 +21,8 @@ export function initDb() {
       displayName TEXT,
       endpointId TEXT,
       lastSeen INTEGER,
-      connected INTEGER DEFAULT 0
+      connected INTEGER DEFAULT 0,
+      profilePhoto TEXT
     );
 
     CREATE TABLE IF NOT EXISTS seen_message_ids (
@@ -29,6 +30,12 @@ export function initDb() {
       timestamp INTEGER
     );
   `);
+
+  try {
+    db.execSync(`ALTER TABLE peers ADD COLUMN profilePhoto TEXT;`);
+  } catch (e) {
+    // Column might already exist, ignore
+  }
 }
 
 export function saveMessage(msg) {
@@ -58,7 +65,7 @@ export function getMessagesWithPeer(myId, peerId) {
   return db.getAllSync(
     `SELECT * FROM messages
      WHERE (senderId = ? AND recipientId = ?)
-        OR (senderId = ? AND recipientId = ?)
+         OR (senderId = ? AND recipientId = ?)
      ORDER BY timestamp ASC`,
     [myId, peerId, peerId, myId]
   );
@@ -76,21 +83,26 @@ export function getUndeliveredMessages() {
 
 export function upsertPeer(peer) {
   db.runSync(
-    `INSERT OR REPLACE INTO peers (deviceId, displayName, endpointId, lastSeen, connected)
-     VALUES (?, ?, ?, ?, ?)`,
-    [peer.deviceId, peer.displayName, peer.endpointId, peer.lastSeen, peer.connected ? 1 : 0]
+    `INSERT OR REPLACE INTO peers (deviceId, displayName, endpointId, lastSeen, connected, profilePhoto)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [peer.deviceId, peer.displayName, peer.endpointId, peer.lastSeen, peer.connected ? 1 : 0, peer.profilePhoto || null]
   );
 }
 
 export function setPeerConnected(deviceId, connected) {
   db.runSync(
-    `UPDATE peers SET connected = ?, lastSeen = ? WHERE deviceId = ?`,
-    [connected ? 1 : 0, Date.now(), deviceId]
+    `UPDATE peers SET connected = ?, lastSeen = ?, profilePhoto = CASE WHEN ? IS NOT NULL THEN ? ELSE profilePhoto END WHERE deviceId = ?`,
+    [connected ? 1 : 0, Date.now(), null, null, deviceId]
   );
 }
 
 export function getAllPeers() {
   return db.getAllSync(`SELECT * FROM peers ORDER BY connected DESC, lastSeen DESC`);
+}
+
+export function deletePeerAndMessages(deviceId) {
+  db.runSync(`DELETE FROM peers WHERE deviceId = ?`, [deviceId]);
+  db.runSync(`DELETE FROM messages WHERE senderId = ? OR recipientId = ?`, [deviceId, deviceId]);
 }
 
 export function hasSeenMessage(id) {
