@@ -9,11 +9,13 @@ import {
   useWindowDimensions,
   Animated,
   Easing,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { setPin, setDisplayName, getOrCreateDeviceId } from '../../Helper/UserIdentity';
+import { requestPermissionsAtSignup, getMissingPermissions } from '../../Helper/Permission';
 
 // Reuse the MeshLines background
 const MeshLines = () => {
@@ -30,7 +32,7 @@ const MeshLines = () => {
 
 export default function Account({ navigation }) {
   const { width, height } = useWindowDimensions();
-  
+
   const [nodeName, setNodeName] = useState('');
   const [pin, setPinValue] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -51,16 +53,15 @@ export default function Account({ navigation }) {
       Alert.alert('Error', 'Please enter a 6-digit numeric PIN.');
       return;
     }
+    // Request all required permissions in the background
+    requestPermissionsAtSignup().catch(e => console.warn('Permissions request error:', e));
+
     try {
       await setDisplayName(nodeName.trim());
       await setPin(pin);
       const deviceId = await getOrCreateDeviceId();
       console.log(`[MeshLink Log] Device registered and logged in. Device ID: ${deviceId}`);
-      Alert.alert(
-        'Account Created', 
-        `Node "${nodeName}" initialized on P2P Mesh Network.`,
-        [{ text: 'Get Started', onPress: () => navigation.replace('Main') }]
-      );
+      navigation.replace('Main');
     } catch (e) {
       Alert.alert('Error', 'Failed to save account credentials.');
     }
@@ -200,8 +201,8 @@ export default function Account({ navigation }) {
       <View style={dynamic.contentWrap}>
         {/* Header with Back button */}
         <View style={dynamic.header}>
-          <TouchableOpacity 
-            style={dynamic.backBtn} 
+          <TouchableOpacity
+            style={dynamic.backBtn}
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
@@ -247,8 +248,8 @@ export default function Account({ navigation }) {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              <TouchableOpacity 
-                style={dynamic.passwordToggle} 
+              <TouchableOpacity
+                style={dynamic.passwordToggle}
                 onPress={() => setShowPin(!showPin)}
               >
                 <Feather name={showPin ? "eye-off" : "eye"} size={16} color="#9EB1FF" />

@@ -15,7 +15,7 @@ import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { NavigationContainer, createNavigationContainerRef, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { isSignedUp } from './Helper/UserIdentity';
+import { isSignedUp, getDisplayName } from './Helper/UserIdentity';
 
 
 const Stack = createNativeStackNavigator();
@@ -98,6 +98,7 @@ function MainTabsScreen({
       {activeTab === 'Profile' && (
         <ProfileScreen
           peers={peers}
+          navigation={navigation}
           onNavigateToNetwork={() => setActiveTab('Network')}
           onNavigateToProfile={() => setActiveTab('Profile')}
         />
@@ -176,6 +177,108 @@ export default function App() {
     }
     checkUserSignup();
   }, []);
+
+  useEffect(() => {
+    if (!isUserSignedUp) return;
+
+    let subConnected, subDisconnected, subPayload;
+    
+    async function initMesh() {
+      try {
+        const { 
+          startMeshNode, 
+          onPeerConnected, 
+          onPeerDisconnected, 
+          onPayloadReceived 
+        } = require('./Helper/NearbyBridge');
+
+        const name = await getDisplayName();
+        startMeshNode(name);
+
+        // Listen for new connections
+        subConnected = onPeerConnected((event) => {
+          const { endpointId, displayName } = event || {};
+          if (!endpointId) return;
+
+          setPeers(prev => {
+            const exists = prev.some(p => p.endpointId === endpointId || p.name === displayName);
+            if (exists) {
+              return prev.map(p => (p.endpointId === endpointId || p.name === displayName) 
+                ? { ...p, status: 'Connected • Just now', avatarStatusColor: '#10b981', endpointId } 
+                : p
+              );
+            }
+            return [...prev, {
+              name: displayName || 'Nearby Node',
+              status: 'Connected • Just now',
+              level: 'STRONG',
+              avatarStatusColor: '#10b981',
+              added: false,
+              endpointId
+            }];
+          });
+        });
+
+        // Listen for disconnections
+        subDisconnected = onPeerDisconnected((event) => {
+          const { endpointId } = event || {};
+          if (!endpointId) return;
+
+          setPeers(prev => prev.map(p => p.endpointId === endpointId 
+            ? { ...p, status: 'Offline', avatarStatusColor: '#6b7280' } 
+            : p
+          ));
+        });
+
+        // Listen for incoming messages
+        subPayload = onPayloadReceived((event) => {
+          const { endpointId, payload } = event || {};
+          if (!endpointId || !payload) return;
+
+          try {
+            const data = JSON.parse(payload);
+            setPeers(currentPeers => {
+              const peer = currentPeers.find(p => p.endpointId === endpointId);
+              const senderName = peer ? peer.name : 'Nearby Node';
+
+              setChatSessions(prev => ({
+                ...prev,
+                [senderName]: [...(prev[senderName] || []), {
+                  id: String(Date.now()),
+                  sender: 'peer',
+                  text: data.text || '',
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  ...data
+                }]
+              }));
+
+              return currentPeers;
+            });
+          } catch (e) {
+            console.error('Failed to parse incoming payload', e);
+          }
+        });
+
+      } catch (e) {
+        console.error('Failed to start mesh node:', e);
+      }
+    }
+
+    initMesh();
+
+    return () => {
+      try {
+        const { stopMeshNode } = require('./Helper/NearbyBridge');
+        stopMeshNode();
+        subConnected?.remove();
+        subDisconnected?.remove();
+        subPayload?.remove();
+      } catch (e) {
+        console.warn('Failed to clean up mesh node listeners:', e);
+      }
+    };
+  }, [isUserSignedUp]);
+
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSOSOptionsModal, setShowSOSOptionsModal] = useState(false);
   const [selectedPeerOptions, setSelectedPeerOptions] = useState(null);
@@ -246,6 +349,17 @@ export default function App() {
       ...prev,
       [peerName]: [...(prev[peerName] || []), newMsg]
     }));
+
+    // Find the peer's endpointId and send it over the P2P connection
+    const peer = peers.find(p => p.name === peerName);
+    if (peer && peer.endpointId) {
+      try {
+        const { sendToPeer } = require('./Helper/NearbyBridge');
+        sendToPeer(peer.endpointId, { text, ...attachment });
+      } catch (e) {
+        console.warn('Failed to transmit message over P2P radio:', e);
+      }
+    }
   };
 
   const navTheme = {
