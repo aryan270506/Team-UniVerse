@@ -17,10 +17,12 @@ export default function SOSScreen({
   onSelectPeerOptions,
   peers = [],
 }) {
-  const discoveredSOSPeers = peers.map(p => ({
-    name: p.name || p.displayName,
-    ip: p.endpointId || 'P2P Link'
-  }));
+  const discoveredSOSPeers = peers
+    .filter(p => p.connected)
+    .map(p => ({
+      name: p.name || p.displayName,
+      ip: p.endpointId || 'P2P Link'
+    }));
 
   // Animation hooks
   const pulseRing1 = useRef(new Animated.Value(0)).current;

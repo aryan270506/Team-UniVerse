@@ -286,8 +286,36 @@ export default function App() {
           setMyDisplayName(displayName);
           setMyDeviceId(deviceId);
 
-          // Read known peers from local database
-          const storedPeers = getAllPeers().map((peer) => normalizePeer({
+          // Read and clean up known peers from local database (deduplicating any legacy entries from the handshake bug)
+          const allStored = getAllPeers();
+          const uniquePeersMap = {};
+          
+          allStored.forEach((p) => {
+            const name = p.displayName || 'Nearby Device';
+            if (name === 'Nearby Device') return;
+            if (!uniquePeersMap[name] || uniquePeersMap[name].lastSeen < p.lastSeen) {
+              uniquePeersMap[name] = p;
+            }
+          });
+
+          // Delete obsolete duplicates from DB
+          allStored.forEach((p) => {
+            const name = p.displayName || 'Nearby Device';
+            if (name === 'Nearby Device') {
+              try {
+                deletePeerAndMessages(p.deviceId);
+              } catch (err) {}
+              return;
+            }
+            if (uniquePeersMap[name] && uniquePeersMap[name].deviceId !== p.deviceId) {
+              try {
+                deletePeerAndMessages(p.deviceId);
+              } catch (err) {}
+            }
+          });
+
+          // Map the cleaned unique peers to state
+          const storedPeers = Object.values(uniquePeersMap).map((peer) => normalizePeer({
             id: peer.deviceId || peer.endpointId,
             deviceId: peer.deviceId || peer.endpointId,
             endpointId: peer.endpointId || peer.deviceId,
@@ -299,6 +327,7 @@ export default function App() {
             avatarStatusColor: '#6b7280',
             added: true,
             lastSeen: peer.lastSeen,
+            profilePhoto: peer.profilePhoto,
           }));
 
           setPeers(storedPeers);
@@ -390,7 +419,7 @@ export default function App() {
 
         const ensurePeer = (endpointId, displayNameValue, extra = {}) => {
           setPeers((currentPeers) => {
-            const index = currentPeers.findIndex((peer) => peer.endpointId === endpointId || peer.id === endpointId || peer.deviceId === endpointId || peer.displayName === displayNameValue || peer.name === displayNameValue);
+            const index = currentPeers.findIndex((peer) => peer.endpointId === endpointId || peer.id === endpointId || peer.deviceId === endpointId);
             const nextPeer = normalizePeer({
               id: endpointId,
               deviceId: endpointId,
@@ -641,6 +670,24 @@ export default function App() {
               }
 
               return nextPeers;
+            }
+
+            // Handle SOS / Broadcast Message
+            if (parsed?.type === 'SOS' || parsed?.recipientId === 'BROADCAST') {
+              console.log('[MeshLink SOS] Broadcast received from:', parsed?.senderName || endpointId);
+              
+              if (peerIndex >= 0) {
+                const nextPeers = [...currentPeers];
+                nextPeers[peerIndex] = normalizePeer({
+                  ...currentPeers[peerIndex],
+                  connected: true,
+                  status: 'SOS Active',
+                  connectionState: 'connected',
+                  avatarStatusColor: '#ef4444',
+                });
+                return nextPeers;
+              }
+              return currentPeers;
             }
 
             // Handle Normal Chat Message

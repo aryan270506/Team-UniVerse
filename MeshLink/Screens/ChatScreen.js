@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,12 +12,22 @@ import {
   Image,
   KeyboardAvoidingView,
   Keyboard,
+  Share,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+let FileSystem = null;
+let Sharing = null;
+try {
+  FileSystem = require('expo-file-system');
+  Sharing = require('expo-sharing');
+} catch (e) {
+  console.warn('[MeshLink Attachment] Native FileSystem/Sharing modules are not available in this build.');
+}
 
 export default function ChatScreen({
   peerName,
@@ -32,6 +42,50 @@ export default function ChatScreen({
   const insets = useSafeAreaInsets();
   const [chatMessage, setChatMessage] = React.useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = React.useState(false);  const [isKeyboardVisible, setKeyboardVisible] = React.useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  const saveBase64ToFile = async (base64String, fileName) => {
+    if (!FileSystem || !FileSystem.documentDirectory) {
+      throw new Error("Local filesystem is not available in this build.");
+    }
+    const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(fileUri, base64String, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return fileUri;
+  };
+
+  const handleOpenAttachment = async (msg) => {
+    try {
+      let uri = null;
+      if (FileSystem && FileSystem.documentDirectory && msg.base64) {
+        uri = await saveBase64ToFile(msg.base64, msg.fileName);
+      } else {
+        uri = msg.imageUri || msg.docUri;
+      }
+
+      if (Sharing && (await Sharing.isAvailableAsync())) {
+        await Sharing.shareAsync(uri);
+      } else {
+        // Fallback for sharing using built-in Share
+        await Share.share({
+          title: msg.fileName,
+          message: msg.base64 
+            ? `Attachment: ${msg.fileName}\nData URI: data:${msg.isImage ? 'image/jpeg' : 'application/octet-stream'};base64,${msg.base64}` 
+            : `Attachment: ${msg.fileName}\nFile URI: ${uri}`,
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to share attachment", e);
+      try {
+        await Share.share({
+          message: `Attachment: ${msg.fileName}\n(Rebuild the app with FileSystem & Sharing support to view files natively.)`,
+        });
+      } catch (err) {
+        Alert.alert("Error", "Could not open or download the attachment.");
+      }
+    }
+  };
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
@@ -71,7 +125,6 @@ export default function ChatScreen({
   const handleSendImage = async () => {
     setShowAttachmentMenu(false);
     
-  
     setTimeout(async () => {
       try {
         if (!ImagePicker || !ImagePicker.requestMediaLibraryPermissionsAsync || !ImagePicker.launchImageLibraryAsync) {
@@ -86,7 +139,8 @@ export default function ChatScreen({
 
         let result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
-          quality: 0.8,
+          quality: 0.5,
+          base64: true,
         });
 
         if (!result.canceled) {
@@ -95,11 +149,28 @@ export default function ChatScreen({
           const sizeBytes = asset.fileSize || 1048576; // fallback 1MB
           const sizeStr = (sizeBytes / (1024 * 1024)).toFixed(1) + ' MB';
 
+          let base64 = asset.base64;
+          if (!base64) {
+            try {
+              const response = await fetch(asset.uri);
+              const blob = await response.blob();
+              base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            } catch (err) {
+              console.warn("Failed to read image as base64:", err);
+            }
+          }
+
           onSendMessage("Sent an image", {
             isImage: true,
             fileName: name,
             fileSize: sizeStr,
-            imageUri: asset.uri
+            imageUri: asset.uri,
+            base64: base64
           });
         }
       } catch (err) {
@@ -118,7 +189,6 @@ export default function ChatScreen({
   const handleSendDocument = async () => {
     setShowAttachmentMenu(false);
     
-   
     setTimeout(async () => {
       try {
         if (!DocumentPicker || !DocumentPicker.getDocumentAsync) {
@@ -136,11 +206,32 @@ export default function ChatScreen({
           const sizeBytes = doc.size || 2097152; // fallback 2MB
           const sizeStr = (sizeBytes / (1024 * 1024)).toFixed(1) + ' MB';
 
+          let base64 = null;
+          try {
+            if (FileSystem && FileSystem.readAsStringAsync) {
+              base64 = await FileSystem.readAsStringAsync(doc.uri, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+            } else {
+              const response = await fetch(doc.uri);
+              const blob = await response.blob();
+              base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            }
+          } catch (err) {
+            console.warn("Failed to read document as base64:", err);
+          }
+
           onSendMessage("Sent a document", {
             isDocument: true,
             fileName: name,
             fileSize: sizeStr,
-            docUri: doc.uri
+            docUri: doc.uri,
+            base64: base64
           });
         }
       } catch (err) {
@@ -254,9 +345,9 @@ export default function ChatScreen({
                       <Text style={styles.msgText}>{msg.text}</Text>
                     </View>
                   ) : msg.isImage ? (
-                    <View style={styles.attachmentImageCard}>
-                      {msg.imageUri ? (
-                        <Image source={{ uri: msg.imageUri }} style={styles.attachmentImageReal} />
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImage(msg)} style={styles.attachmentImageCard}>
+                      {msg.base64 || msg.imageUri ? (
+                        <Image source={{ uri: msg.base64 ? `data:image/jpeg;base64,${msg.base64}` : msg.imageUri }} style={styles.attachmentImageReal} />
                       ) : (
                         <View style={styles.attachmentImageThumbnail}>
                           <Feather name="image" size={24} color="#818cf8" />
@@ -266,9 +357,9 @@ export default function ChatScreen({
                         <Text style={styles.attachmentName}>{msg.fileName}</Text>
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ) : msg.isDocument ? (
-                    <View style={styles.attachmentDocCard}>
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleOpenAttachment(msg)} style={styles.attachmentDocCard}>
                       <View style={styles.attachmentDocIconWrapper}>
                         <Feather name="file-text" size={20} color="#818cf8" />
                       </View>
@@ -277,7 +368,7 @@ export default function ChatScreen({
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
                       <Feather name="download" size={14} color="#94a3b8" style={styles.attachmentDownloadIcon} />
-                    </View>
+                    </TouchableOpacity>
                   ) : (
                     <Text style={styles.msgText}>{msg.text}</Text>
                   )}
@@ -290,9 +381,9 @@ export default function ChatScreen({
               <View key={msg.id} style={styles.outgoingMsgContainer}>
                 <View style={[styles.outgoingMsgBubble, (msg.isImage || msg.isDocument) && { backgroundColor: '#1e293b' }]}>
                   {msg.isImage ? (
-                    <View style={styles.attachmentImageCard}>
-                      {msg.imageUri ? (
-                        <Image source={{ uri: msg.imageUri }} style={styles.attachmentImageReal} />
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewImage(msg)} style={styles.attachmentImageCard}>
+                      {msg.base64 || msg.imageUri ? (
+                        <Image source={{ uri: msg.base64 ? `data:image/jpeg;base64,${msg.base64}` : msg.imageUri }} style={styles.attachmentImageReal} />
                       ) : (
                         <View style={styles.attachmentImageThumbnail}>
                           <Feather name="image" size={24} color="#a5b4fc" />
@@ -302,9 +393,9 @@ export default function ChatScreen({
                         <Text style={styles.attachmentName}>{msg.fileName}</Text>
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ) : msg.isDocument ? (
-                    <View style={styles.attachmentDocCard}>
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleOpenAttachment(msg)} style={styles.attachmentDocCard}>
                       <View style={styles.attachmentDocIconWrapper}>
                         <Feather name="file-text" size={20} color="#a5b4fc" />
                       </View>
@@ -313,7 +404,7 @@ export default function ChatScreen({
                         <Text style={styles.attachmentSize}>{msg.fileSize}</Text>
                       </View>
                       <Feather name="download" size={14} color="#a5b4fc" style={styles.attachmentDownloadIcon} />
-                    </View>
+                    </TouchableOpacity>
                   ) : (
                     <Text style={styles.msgText}>{msg.text}</Text>
                   )}
@@ -440,6 +531,31 @@ export default function ChatScreen({
               <Text style={styles.optionsCancelText}>Cancel</Text>
             </TouchableOpacity>
           </BlurView>
+        </View>
+      </Modal>
+
+      {/* Fullscreen Image Preview Modal */}
+      <Modal visible={!!previewImage} transparent={true} animationType="fade" onRequestClose={() => setPreviewImage(null)}>
+        <View style={styles.previewOverlay}>
+          <TouchableOpacity style={styles.previewCloseBtn} activeOpacity={0.7} onPress={() => setPreviewImage(null)}>
+            <Feather name="x" size={24} color="#fff" />
+          </TouchableOpacity>
+          
+          {previewImage && (
+            <Image 
+              source={{ uri: previewImage.base64 ? `data:image/jpeg;base64,${previewImage.base64}` : previewImage.imageUri }} 
+              style={styles.previewImageReal} 
+              resizeMode="contain"
+            />
+          )}
+          
+          <View style={styles.previewFooter}>
+            <Text style={styles.previewFileName} numberOfLines={1}>{previewImage?.fileName}</Text>
+            <TouchableOpacity style={styles.previewDownloadBtn} activeOpacity={0.8} onPress={() => handleOpenAttachment(previewImage)}>
+              <Feather name="download" size={18} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.previewDownloadText}>Save / Share</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -828,5 +944,54 @@ const styles = StyleSheet.create({
   },
   attachmentDownloadIcon: {
     marginLeft: 8,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewCloseBtn: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  previewImageReal: {
+    width: '100%',
+    height: '70%',
+  },
+  previewFooter: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+  },
+  previewFileName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  previewDownloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3f7fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  previewDownloadText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
