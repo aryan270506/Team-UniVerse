@@ -3,11 +3,13 @@ plugins {
   id 'expo-module-gradle-plugin'
 }
 
-group = 'com.sekirohub.MeshLink'
+group = 'com.sekirohub.nearbymodule'
 version = '0.1.0'
 
+
+
 android {
-  namespace "com.sekirohub.MeshLink"
+  namespace "com.sekirohub.nearbymodule"
   defaultConfig {
     versionCode 1
     versionName "0.1.0"

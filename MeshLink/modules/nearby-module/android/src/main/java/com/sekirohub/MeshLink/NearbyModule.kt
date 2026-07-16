@@ -11,7 +11,10 @@ class NearbyModule : Module() {
     private val SERVICE_ID = "com.sekirohub.MeshLink.SERVICE"
     private val STRATEGY = Strategy.P2P_CLUSTER
 
-    private val context get() = appContext.reactContext ?: throw IllegalStateException("React Context is null")
+   private val context
+    get() = requireNotNull(appContext.reactContext) {
+        "ReactContext is null"
+    }
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
@@ -148,26 +151,25 @@ class NearbyModule : Module() {
         }
 
         Function("rejectPeerConnection") { endpointId: String ->
-            Nearby.getConnectionsClient(context)
-                .rejectConnection(endpointId)
-                .addOnSuccessListener {
-                    Log.d(TAG, "Rejected connection from $endpointId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to reject connection", e)
-                }
-        }
+    try {
+        Nearby.getConnectionsClient(context)
+            .rejectConnection(endpointId)
 
+        Log.d(TAG, "Rejected connection from $endpointId")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to reject connection", e)
+    }
+}
         Function("disconnectPeer") { endpointId: String ->
-            Nearby.getConnectionsClient(context)
-                .disconnectFromEndpoint(endpointId)
-                .addOnSuccessListener {
-                    Log.d(TAG, "Disconnected from $endpointId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to disconnect from $endpointId", e)
-                }
-        }
+    try {
+        Nearby.getConnectionsClient(context)
+            .disconnectFromEndpoint(endpointId)
+
+        Log.d(TAG, "Disconnected from $endpointId")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to disconnect from $endpointId", e)
+    }
+}
 
         Function("stopAdvertising") {
             Nearby.getConnectionsClient(context).stopAdvertising()
@@ -180,13 +182,17 @@ class NearbyModule : Module() {
         }
 
         Function("sendPayload") { endpointId: String, payloadString: String ->
-            val bytes = payloadString.toByteArray(Charsets.UTF_8)
-            val payload = Payload.fromBytes(bytes)
-            Nearby.getConnectionsClient(context)
-                .sendPayload(endpointId, payload)
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to send payload to $endpointId", e)
-                }
-        }
+    val bytes = payloadString.toByteArray(Charsets.UTF_8)
+    val payload = Payload.fromBytes(bytes)
+
+    try {
+        Nearby.getConnectionsClient(context)
+            .sendPayload(listOf(endpointId), payload)
+
+        Log.d(TAG, "Payload sent to $endpointId")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to send payload to $endpointId", e)
+    }
+}
     }
 }
